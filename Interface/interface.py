@@ -1,5 +1,7 @@
 import os
+from threading import Event
 
+import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect
 from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
@@ -89,6 +91,48 @@ class CircleAnimation(QWidget):
                     y = circle.y() + circle.height() // 2 - round(size) // 2
                     self.circles[i] = (QRect(x, y, round(size), round(size)), QColor(color.red(), color.green(), color.blue(), 0))
         self.update()
+
+
+stop = Event()
+definedVolume = -1
+
+def playMusic(musicName, window, directory):
+    # ---------- Initialize Pygame Mixer ----------
+    pygame.mixer.init()
+    pygame.mixer.music.load(directory+'/' + musicName)
+
+    global definedVolume
+    if definedVolume != -1:
+        setVolume(definedVolume)
+    else:
+        setVolume(0.04)
+
+    stop.clear()
+
+    pygame.mixer.music.play()  # plays music
+
+    # ---------- Waits for the music to end ----------
+    while pygame.mixer.music.get_busy():
+        pygame.time.wait(100)
+
+        # ---------- If user closes program or cancel ----------
+        if stop.is_set():
+            pygame.mixer.music.stop()
+            break
+
+    # ---------- Finished Music ----------
+    try:
+        window.write_event_value("Finished Music Event", None)
+    except:
+        "ignore"  # tk error, from tkinder library we're not using
+
+def stopMusic():
+    stop.set()
+
+def setVolume(volume):
+    pygame.mixer.music.set_volume(volume)
+    global definedVolume
+    definedVolume = volume
 
 
 class LoginWindow(QMainWindow):
@@ -242,7 +286,8 @@ class MusicsWindow(QMainWindow):
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
-        self.music_playing = True  #TODO - verificar quando a música está a tocar ou não para colocar o layout certo
+        self.music_playing = False  #TODO - verificar quando a música está a tocar ou não para colocar o layout certo
+        self.is_rating_music = False #TODO
 
         global is_in_building_dataset_phase
         global training_percentage
@@ -452,146 +497,168 @@ class MusicsWindow(QMainWindow):
             base_layout.addWidget(buttons_widget)
 
         else:  # Music finished playing
-            # Blank space two
-            blank_space_two = QLabel()
-            blank_space_two.setMaximumSize(10, 30)
-            base_layout.addWidget(blank_space_two)
+            if self.is_rating_music:
+                # Blank space two
+                blank_space_two = QLabel()
+                blank_space_two.setMaximumSize(10, 30)
+                base_layout.addWidget(blank_space_two)
 
-            rate_layout = QHBoxLayout()
-            rate_layout.setAlignment(Qt.AlignHCenter)
+                rate_layout = QHBoxLayout()
+                rate_layout.setAlignment(Qt.AlignHCenter)
 
-            rate_label = QLabel("Rate your emotion:")
-            rate_label_font = rate_label.font()
-            rate_label_font.setPointSize(20)
-            rate_label.setFont(rate_label_font)
-            rate_layout.addWidget(rate_label)
+                rate_label = QLabel("Rate your emotion:")
+                rate_label_font = rate_label.font()
+                rate_label_font.setPointSize(20)
+                rate_label.setFont(rate_label_font)
+                rate_layout.addWidget(rate_label)
 
-            rate_widget = QWidget()
-            rate_widget.setLayout(rate_layout)
-            rate_widget.setMaximumSize(2000, 80)
-            base_layout.addWidget(rate_widget)
+                rate_widget = QWidget()
+                rate_widget.setLayout(rate_layout)
+                rate_widget.setMaximumSize(2000, 80)
+                base_layout.addWidget(rate_widget)
 
-            # Blank space three
-            blank_space_three = QLabel()
-            blank_space_three.setMaximumSize(10, 30)
-            base_layout.addWidget(blank_space_three)
+                # Blank space three
+                blank_space_three = QLabel()
+                blank_space_three.setMaximumSize(10, 30)
+                base_layout.addWidget(blank_space_three)
 
-            # First Line of buttons
-            first_line_layout = QHBoxLayout()
-            first_line_layout.setAlignment(Qt.AlignHCenter)
-            first_line_layout.setSpacing(30)
-            first_line_layout.setContentsMargins(0, 0, 0, 0)
+                # First Line of buttons
+                first_line_layout = QHBoxLayout()
+                first_line_layout.setAlignment(Qt.AlignHCenter)
+                first_line_layout.setSpacing(30)
+                first_line_layout.setContentsMargins(0, 0, 0, 0)
 
-            # Angry button
-            angry_button = QPushButton("Angry")
-            angry_button.setMinimumSize(150, 80)
-            angry_font = angry_button.font()
-            angry_font.setPixelSize(25)
-            angry_button.setFont(angry_font)
-            angry_button.setCursor(QCursor(Qt.PointingHandCursor))
-            angry_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            angry_button.clicked.connect(self.angry_button_clicked)
-            first_line_layout.addWidget(angry_button)
+                # Angry button
+                angry_button = QPushButton("Angry")
+                angry_button.setMinimumSize(150, 80)
+                angry_font = angry_button.font()
+                angry_font.setPixelSize(25)
+                angry_button.setFont(angry_font)
+                angry_button.setCursor(QCursor(Qt.PointingHandCursor))
+                angry_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                angry_button.clicked.connect(self.angry_button_clicked)
+                first_line_layout.addWidget(angry_button)
 
-            # Disgust button
-            disgust_button = QPushButton("Disgust")
-            disgust_button.setMinimumSize(150, 80)
-            disgust_font = disgust_button.font()
-            disgust_font.setPixelSize(25)
-            disgust_button.setFont(disgust_font)
-            disgust_button.setCursor(QCursor(Qt.PointingHandCursor))
-            disgust_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            disgust_button.clicked.connect(self.disgust_button_clicked)
-            first_line_layout.addWidget(disgust_button)
+                # Disgust button
+                disgust_button = QPushButton("Disgust")
+                disgust_button.setMinimumSize(150, 80)
+                disgust_font = disgust_button.font()
+                disgust_font.setPixelSize(25)
+                disgust_button.setFont(disgust_font)
+                disgust_button.setCursor(QCursor(Qt.PointingHandCursor))
+                disgust_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                disgust_button.clicked.connect(self.disgust_button_clicked)
+                first_line_layout.addWidget(disgust_button)
 
-            # Fear button
-            fear_button = QPushButton("Fear")
-            fear_button.setMinimumSize(150, 80)
-            fear_font = fear_button.font()
-            fear_font.setPixelSize(25)
-            fear_button.setFont(fear_font)
-            fear_button.setCursor(QCursor(Qt.PointingHandCursor))
-            fear_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            fear_button.clicked.connect(self.fear_button_clicked)
-            first_line_layout.addWidget(fear_button)
+                # Fear button
+                fear_button = QPushButton("Fear")
+                fear_button.setMinimumSize(150, 80)
+                fear_font = fear_button.font()
+                fear_font.setPixelSize(25)
+                fear_button.setFont(fear_font)
+                fear_button.setCursor(QCursor(Qt.PointingHandCursor))
+                fear_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                fear_button.clicked.connect(self.fear_button_clicked)
+                first_line_layout.addWidget(fear_button)
 
-            # Sad button
-            sad_button = QPushButton("Sad")
-            sad_button.setMinimumSize(150, 80)
-            sad_font = sad_button.font()
-            sad_font.setPixelSize(25)
-            sad_button.setFont(sad_font)
-            sad_button.setCursor(QCursor(Qt.PointingHandCursor))
-            sad_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            sad_button.clicked.connect(self.sad_button_clicked)
-            first_line_layout.addWidget(sad_button)
+                # Sad button
+                sad_button = QPushButton("Sad")
+                sad_button.setMinimumSize(150, 80)
+                sad_font = sad_button.font()
+                sad_font.setPixelSize(25)
+                sad_button.setFont(sad_font)
+                sad_button.setCursor(QCursor(Qt.PointingHandCursor))
+                sad_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                sad_button.clicked.connect(self.sad_button_clicked)
+                first_line_layout.addWidget(sad_button)
 
-            first_line_widget = QWidget()
-            first_line_widget.setLayout(first_line_layout)
-            first_line_widget.setMaximumSize(2000, 80)
-            base_layout.addWidget(first_line_widget)
+                first_line_widget = QWidget()
+                first_line_widget.setLayout(first_line_layout)
+                first_line_widget.setMaximumSize(2000, 80)
+                base_layout.addWidget(first_line_widget)
 
-            # Blank space four
-            blank_space_four = QLabel()
-            blank_space_four.setMaximumSize(10, 30)
-            base_layout.addWidget(blank_space_four)
+                # Blank space four
+                blank_space_four = QLabel()
+                blank_space_four.setMaximumSize(10, 30)
+                base_layout.addWidget(blank_space_four)
 
-            # Second Line of buttons
-            second_line_layout = QHBoxLayout()
-            second_line_layout.setAlignment(Qt.AlignHCenter)
-            second_line_layout.setSpacing(30)
-            second_line_layout.setContentsMargins(0, 0, 0, 0)
+                # Second Line of buttons
+                second_line_layout = QHBoxLayout()
+                second_line_layout.setAlignment(Qt.AlignHCenter)
+                second_line_layout.setSpacing(30)
+                second_line_layout.setContentsMargins(0, 0, 0, 0)
 
-            # Neutral button
-            neutral_button = QPushButton("Neutral")
-            neutral_button.setMinimumSize(150, 80)
-            neutral_font = neutral_button.font()
-            neutral_font.setPixelSize(25)
-            neutral_button.setFont(neutral_font)
-            neutral_button.setCursor(QCursor(Qt.PointingHandCursor))
-            neutral_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            neutral_button.clicked.connect(self.neutral_button_clicked)
-            second_line_layout.addWidget(neutral_button)
+                # Neutral button
+                neutral_button = QPushButton("Neutral")
+                neutral_button.setMinimumSize(150, 80)
+                neutral_font = neutral_button.font()
+                neutral_font.setPixelSize(25)
+                neutral_button.setFont(neutral_font)
+                neutral_button.setCursor(QCursor(Qt.PointingHandCursor))
+                neutral_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                neutral_button.clicked.connect(self.neutral_button_clicked)
+                second_line_layout.addWidget(neutral_button)
 
-            # Surprised button
-            surprised_button = QPushButton("Disgust")
-            surprised_button.setMinimumSize(150, 80)
-            surprised_font = surprised_button.font()
-            surprised_font.setPixelSize(25)
-            surprised_button.setFont(surprised_font)
-            surprised_button.setCursor(QCursor(Qt.PointingHandCursor))
-            surprised_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            surprised_button.clicked.connect(self.surprise_button_clicked)
-            second_line_layout.addWidget(surprised_button)
+                # Surprised button
+                surprised_button = QPushButton("Disgust")
+                surprised_button.setMinimumSize(150, 80)
+                surprised_font = surprised_button.font()
+                surprised_font.setPixelSize(25)
+                surprised_button.setFont(surprised_font)
+                surprised_button.setCursor(QCursor(Qt.PointingHandCursor))
+                surprised_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                surprised_button.clicked.connect(self.surprise_button_clicked)
+                second_line_layout.addWidget(surprised_button)
 
-            # Happy button
-            happy_button = QPushButton("Fear")
-            happy_button.setMinimumSize(150, 80)
-            happy_font = happy_button.font()
-            happy_font.setPixelSize(25)
-            happy_button.setFont(happy_font)
-            happy_button.setCursor(QCursor(Qt.PointingHandCursor))
-            happy_button.setStyleSheet(
-                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-            happy_button.clicked.connect(self.happy_button_clicked)
-            second_line_layout.addWidget(happy_button)
+                # Happy button
+                happy_button = QPushButton("Fear")
+                happy_button.setMinimumSize(150, 80)
+                happy_font = happy_button.font()
+                happy_font.setPixelSize(25)
+                happy_button.setFont(happy_font)
+                happy_button.setCursor(QCursor(Qt.PointingHandCursor))
+                happy_button.setStyleSheet(
+                    "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+                happy_button.clicked.connect(self.happy_button_clicked)
+                second_line_layout.addWidget(happy_button)
 
-            second_line_widget = QWidget()
-            second_line_widget.setLayout(second_line_layout)
-            second_line_widget.setMaximumSize(2000, 80)
-            base_layout.addWidget(second_line_widget)
+                second_line_widget = QWidget()
+                second_line_widget.setLayout(second_line_layout)
+                second_line_widget.setMaximumSize(2000, 80)
+                base_layout.addWidget(second_line_widget)
 
-            # Blank space five
-            blank_space_five = QLabel()
-            blank_space_five.setMaximumSize(10, 800)
-            base_layout.addWidget(blank_space_five)
+                # Blank space five
+                blank_space_five = QLabel()
+                blank_space_five.setMaximumSize(10, 800)
+                base_layout.addWidget(blank_space_five)
+            else:  # Button Play for next music
+                play_layout = QHBoxLayout()
+                play_layout.setAlignment(Qt.AlignHCenter)
 
+                play_btn = QPushButton("Play next\n music")
+                play_font = play_btn.font()
+                play_font.setPointSize(15)
+                play_btn.setFont(play_font)
+                play_btn.clicked.connect(self.play_next_music_clicked)
+                play_btn.setMaximumSize(200, 100)
+                play_btn.setMinimumSize(200, 100)
+                play_layout.addWidget(play_btn)
+
+                play_widget = QWidget()
+                play_widget.setLayout(play_layout)
+                play_widget.setMaximumSize(2000, 120)
+                base_layout.addWidget(play_widget)
+
+                # Blank space five
+                blank_space_five = QLabel()
+                blank_space_five.setMaximumSize(10, 800)
+                base_layout.addWidget(blank_space_five)
         base_widget = Color('#f5e6d0')
         base_widget.setLayout(base_layout)
         self.setCentralWidget(base_widget)
@@ -655,6 +722,8 @@ class MusicsWindow(QMainWindow):
     def happy_button_clicked(self):
         print("TODO")  # TODO
 
+    def play_next_music_clicked(self):
+        print("TODO") # TODO
 
 class BuildingPhaseHomeScreen(QMainWindow):
     def __init__(self):
@@ -1018,8 +1087,8 @@ class ApplicationHomeScreen(QMainWindow):
 
 def main():
     app = QApplication([])
-    window = LoginWindow()
-    # window = MusicsWindow()
+    # window = LoginWindow()
+    window = MusicsWindow()
     # window = ApplicationHomeScreen()
     window.show()
     app.exec()
