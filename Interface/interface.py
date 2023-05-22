@@ -1,3 +1,5 @@
+import os
+
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect
 from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
@@ -5,11 +7,20 @@ from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLa
 from numpy.core.defchararray import strip
 import random
 
-window_titles = [
-    'FeelTuneAI',
-    'Something went wrong'
-]
+current_user_name = ''
+is_in_building_dataset_phase = True
+training_percentage = 0
 
+class Bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 class Color(QWidget):
     def __init__(self, color):
@@ -88,8 +99,6 @@ class LoginWindow(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
-        self.training_phase = 0  #TODO - verificar se o utilizador está ainda na fase de treino ou não - 0 = não; 1 = sim
-
         # Base Layout
         base_layout = QHBoxLayout()
         base_layout.setContentsMargins(0, 0, 0, 0)
@@ -147,14 +156,14 @@ class LoginWindow(QMainWindow):
         name_label.setMaximumSize(120, 200)
         input_name_layout.addWidget(name_label)
 
-        input_name = QLineEdit()
-        input_name_font = input_name.font()
+        self.input_name = QLineEdit()
+        input_name_font = self.input_name.font()
         input_name_font.setPointSize(15)
-        input_name.setFont(input_name_font)
-        input_name.setMaxLength(50)
-        input_name.setPlaceholderText("\tEnter your name")
-        input_name.setMaximumSize(500, 50)
-        input_name_layout.addWidget(input_name)
+        self.input_name.setFont(input_name_font)
+        self.input_name.setMaxLength(50)
+        self.input_name.setPlaceholderText("\tEnter your name")
+        self.input_name.setMaximumSize(500, 50)
+        input_name_layout.addWidget(self.input_name)
 
         input_name_widget = QWidget()
         input_name_widget.setLayout(input_name_layout)
@@ -205,8 +214,16 @@ class LoginWindow(QMainWindow):
         self.setCentralWidget(base_widget)
 
     def show_next_window(self, ):
-        if self.training_phase == 1:
-            self.nextWindow = TrainingHomeScreen()
+        global current_user_name
+        current_user_name = self.input_name.text()
+        global is_in_building_dataset_phase
+        # TODO - atualizar is_in_training_phase de acordo com o user
+
+        global training_percentage
+        # TODO - atualizar training_percentage de acordo com o user
+
+        if is_in_building_dataset_phase:
+            self.nextWindow = BuildingPhaseHomeScreen()
             self.nextWindow.show()
             self.close()
         else:
@@ -215,7 +232,7 @@ class LoginWindow(QMainWindow):
             self.close()
 
 
-class TrainingMusicsWindow(QMainWindow):
+class MusicsWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
@@ -225,7 +242,10 @@ class TrainingMusicsWindow(QMainWindow):
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
-        self.music_playing = 1  #TODO - verificar quando a música está a tocar ou não para colocar o layout certo
+        self.music_playing = True  #TODO - verificar quando a música está a tocar ou não para colocar o layout certo
+
+        global is_in_building_dataset_phase
+        global training_percentage
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -256,25 +276,26 @@ class TrainingMusicsWindow(QMainWindow):
         title_widget.setLayout(title_layout)
         header_line.addWidget(title_widget)
 
-        # Training Phase corner
-        corner_layout = QHBoxLayout()
-        corner_layout.setAlignment(Qt.AlignRight)
+        if is_in_building_dataset_phase:
+            # Training Phase corner
+            corner_layout = QHBoxLayout()
+            corner_layout.setAlignment(Qt.AlignRight)
 
-        line_layout = QHBoxLayout()
-        lines = self.PaintLine()
-        lines.setLayout(line_layout)
-        lines.setMinimumSize(40, 80)
-        corner_layout.addWidget(lines)
+            line_layout = QHBoxLayout()
+            lines = self.PaintLine()
+            lines.setLayout(line_layout)
+            lines.setMinimumSize(40, 80)
+            corner_layout.addWidget(lines)
 
-        training_label = QLabel('Training\n  Phase')
-        training_font = training_label.font()
-        training_font.setPixelSize(25)
-        training_label.setFont(training_font)
-        corner_layout.addWidget(training_label)
+            training_label = QLabel('Building Dataset\n \t Phase')
+            training_font = training_label.font()
+            training_font.setPixelSize(25)
+            training_label.setFont(training_font)
+            corner_layout.addWidget(training_label)
 
-        corner_widget = QWidget()
-        corner_widget.setLayout(corner_layout)
-        header_line.addWidget(corner_widget)
+            corner_widget = QWidget()
+            corner_widget.setLayout(corner_layout)
+            header_line.addWidget(corner_widget)
 
         header_line_widget = QWidget()
         header_line_widget.setLayout(header_line)
@@ -286,47 +307,62 @@ class TrainingMusicsWindow(QMainWindow):
         blank_space_one.setMaximumSize(10, 30)
         base_layout.addWidget(blank_space_one)
 
-        # Training Progress Slider
-        progress_layout_vertical = QVBoxLayout()
-        progress_layout_vertical.setAlignment(Qt.AlignHCenter)
+        self.music_files = []
+        self.music_files_length = 0
+        # Read training musics
+        if is_in_building_dataset_phase:
+            self.music_files = os.listdir('../BuildingDatasetPhaseMusics')
+            self.music_files_length = len(self.music_files)
 
-        # Slider value
-        self.slider_value_label = QLineEdit(str(self.slider_value)+"%")
-        self.slider_value_label.setReadOnly(True)
-        slider_font = self.slider_value_label.font()
-        slider_font.setPointSize(13)
-        self.slider_value_label.setFont(slider_font)
-        self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0)}");
-        self.slider_value_label.setMaximumSize(800, 30)
-        self.slider_value_label.textChanged.connect(self.move_slider_label)
-        progress_layout_vertical.addWidget(self.slider_value_label)
+            if self.music_files_length == 0:
+                print(f"{Bcolors.WARNING} Music files length is zero" + Bcolors.ENDC)
+                exit()
+        else:  # Read application musics
+            self.music_files_length = 1
+            print("TODO")  # TODO
 
-        self.progress_slider = QSlider(Qt.Horizontal)
-        self.progress_slider.setMinimum(0)
-        self.progress_slider.setValue(self.slider_value)
-        self.progress_slider.setMaximum(100)
-        self.progress_slider.setSingleStep(5) #TODO - dividir pelo número de músicas do dataset de treino
-        self.progress_slider.setMaximumSize(800, 40)
-        self.progress_slider.setStyleSheet("QSlider::groove:horizontal "
-                                      "{border: 1px solid #999999; height: 8px;"
-                                        "margin: 2px 0;} "
-                                      "QSlider::handle:horizontal "
-                                      "{background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f7c997, stop:1 #ffffff);"
-                                        "border: 1px solid #f7c997; width: 18px;"
-                                        "margin: -5px 0; border-radius: 3px;}"
-                                      "QSlider::add-page:horizontal {background: white}"
-                                      "QSlider::sub-page:horizontal {background: #ffd7ab}")
-        self.progress_slider.valueChanged.connect(self.slider_value_changed)
-        # self.progress_slider.setEnabled(False)  #TODO - colocar sem ser comentário - só mudar o valor do slider quando acabar música e for avaliada pelo user
+        if is_in_building_dataset_phase:
+            # Training Progress Slider
+            progress_layout_vertical = QVBoxLayout()
+            progress_layout_vertical.setAlignment(Qt.AlignHCenter)
 
-        progress_layout_vertical.addWidget(self.progress_slider)
-        progress_layout_vertical_widget = QWidget()
-        progress_layout_vertical_widget.setMaximumSize(2000, 80)
-        progress_layout_vertical_widget.setLayout(progress_layout_vertical)
+            # Slider value
+            self.slider_value_label = QLineEdit(str(training_percentage)+"%")
+            self.slider_value_label.setReadOnly(True)
+            slider_font = self.slider_value_label.font()
+            slider_font.setPointSize(13)
+            self.slider_value_label.setFont(slider_font)
+            self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0)}");
+            self.slider_value_label.setMaximumSize(800, 30)
+            self.slider_value_label.textChanged.connect(self.move_slider_label)
+            progress_layout_vertical.addWidget(self.slider_value_label)
 
-        base_layout.addWidget(progress_layout_vertical_widget)
+            self.progress_slider = QSlider(Qt.Horizontal)
+            self.progress_slider.setMinimum(0)
+            self.progress_slider.setValue(training_percentage)
+            self.progress_slider.setMaximum(100)
+            self.progress_slider.setSingleStep(round(100/self.music_files_length)) #TODO - dividir pelo número de músicas do dataset de treino
+            self.progress_slider.setMaximumSize(800, 40)
+            self.progress_slider.setStyleSheet("QSlider::groove:horizontal "
+                                          "{border: 1px solid #999999; height: 8px;"
+                                            "margin: 2px 0;} "
+                                          "QSlider::handle:horizontal "
+                                          "{background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f7c997, stop:1 #ffffff);"
+                                            "border: 1px solid #f7c997; width: 18px;"
+                                            "margin: -5px 0; border-radius: 3px;}"
+                                          "QSlider::add-page:horizontal {background: white}"
+                                          "QSlider::sub-page:horizontal {background: #ffd7ab}")
+            self.progress_slider.valueChanged.connect(self.slider_value_changed)
+            # self.progress_slider.setEnabled(False)  #TODO - colocar sem ser comentário - só mudar o valor do slider quando acabar música e for avaliada pelo user
 
-        if self.music_playing == 1:
+            progress_layout_vertical.addWidget(self.progress_slider)
+            progress_layout_vertical_widget = QWidget()
+            progress_layout_vertical_widget.setMaximumSize(2000, 80)
+            progress_layout_vertical_widget.setLayout(progress_layout_vertical)
+
+            base_layout.addWidget(progress_layout_vertical_widget)
+
+        if self.music_playing:
             # Circles animation
             circle_layout = QHBoxLayout()
             circle_layout.setAlignment(Qt.AlignHCenter)
@@ -620,7 +656,7 @@ class TrainingMusicsWindow(QMainWindow):
         print("TODO")  # TODO
 
 
-class TrainingHomeScreen(QMainWindow):
+class BuildingPhaseHomeScreen(QMainWindow):
     def __init__(self):
         super().__init__()
 
@@ -665,7 +701,7 @@ class TrainingHomeScreen(QMainWindow):
         title_layout.setAlignment(Qt.AlignHCenter)
         title_layout.setContentsMargins(0, 0, 0, 0)
 
-        title = QLabel("Training Phase")
+        title = QLabel("Building Dataset Phase")
         title_font = title.font()
         title_font.setPointSize(30)
         title.setFont(title_font)
@@ -747,7 +783,7 @@ class TrainingHomeScreen(QMainWindow):
         self.setCentralWidget(base_widget)
 
     def continue_button_clicked(self):
-        self.nextWindow = TrainingMusicsWindow()
+        self.nextWindow = MusicsWindow()
         self.nextWindow.show()
         self.close()
 
@@ -861,6 +897,8 @@ class ApplicationHomeScreen(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
+        global current_user_name
+
         # Base Layout
         base_layout = QVBoxLayout()
         base_layout.setContentsMargins(10, 20, 10, 10)
@@ -898,7 +936,7 @@ class ApplicationHomeScreen(QMainWindow):
         welcome_layout.setContentsMargins(0, 0, 0, 0)
         welcome_layout.setAlignment(Qt.AlignHCenter)
 
-        welcome_label = QLabel("Glad you tuned in, Ana!")
+        welcome_label = QLabel(f"Glad you tuned in, {current_user_name}!")
         welcome_font = welcome_label.font()
         welcome_font.setPointSize(20)
         welcome_label.setFont(welcome_font)
@@ -974,14 +1012,19 @@ class ApplicationHomeScreen(QMainWindow):
         self.setCentralWidget(base_widget)
 
     def show_next_window(self):
-        self.nextWindow = TrainingMusicsWindow()
+        self.nextWindow = MusicsWindow()
         self.nextWindow.show()
         self.close()
 
+def main():
+    app = QApplication([])
+    window = LoginWindow()
+    # window = MusicsWindow()
+    # window = ApplicationHomeScreen()
+    window.show()
+    app.exec()
 
-app = QApplication([])
-window = LoginWindow()
-# window = TrainingMusicsWindow()
-window.show()
-app.exec()
+
+if __name__ == "__main__":
+    main()
 
