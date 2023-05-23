@@ -3,6 +3,7 @@ import threading
 from threading import Event
 from time import sleep
 
+import context.main as contextMain
 from EmotionRecognition.EmotionDetection import main as emotionDetectionMain, stopEmotions
 
 import pygame as pygame
@@ -733,6 +734,23 @@ class MusicsWindow(QMainWindow):
             else:
                 self.stacked_widget.setCurrentIndex(2)
 
+    def get_context(self):
+        dataframe = contextMain.execute()
+        if dataframe is not None:
+            csv_context = dataframe.to_csv(index=False)
+            context_headers = csv_context.split('\n')[0]
+            context_headers = context_headers.split(',')
+
+            global context_headers_to_dataset
+            if len(context_headers_to_dataset) == 0:
+                context_headers_to_dataset = context_headers
+
+            context_values = csv_context.split('\n')[1]
+            context_values = context_values.split(',')
+            context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
+            return context_dict
+        return {}
+
     def angry_button_clicked(self):
         print("TODO")  # TODO
 
@@ -1218,6 +1236,7 @@ class ApplicationHomeScreen(QMainWindow):
         self.nextWindow = MusicsWindow()
         self.nextWindow.show()
         self.close()
+
 
 def main():
     app = QApplication([])
