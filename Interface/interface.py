@@ -7,24 +7,25 @@ from threading import Event
 from time import sleep
 
 import cv2
+import librosa
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
 
 import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect, QThread, pyqtSignal
-from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent
+from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent, QMovie
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
     QHBoxLayout, QSlider, QMessageBox, QStackedWidget, QFileDialog
 from numpy.core.defchararray import strip
 import random
 
 from download_from_yt import download_musics
-from predict_musics_VA import predict_dataset_emotions
+from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
 
 current_user_name = ''
 is_in_building_dataset_phase = True
-training_percentage = 0
+current_user_bpd_progress = 0
 emotionsCounter = None
 
 # datset for model training variables
@@ -248,11 +249,22 @@ class LoginWindow(QMainWindow):
     def show_next_window(self, ):
         global current_user_name
         current_user_name = self.input_name.text()
+        progress = 0
+        file_exists = os.path.isfile('users.csv')
+        if file_exists:
+            with open('users.csv', 'r') as f:
+                data = f.readlines()
+                for line in data:
+                    user_name = line.split(',')[0]
+                    if user_name.lower() == current_user_name.lower():
+                        progress = line.split(',')[1]
+                        break
         global is_in_building_dataset_phase
-        # TODO - atualizar is_in_training_phase de acordo com o user
+        if progress == 100:
+            is_in_building_dataset_phase = False
 
-        global training_percentage
-        # TODO - atualizar training_percentage de acordo com o user
+        global current_user_bpd_progress
+        current_user_bpd_progress = progress
 
         if is_in_building_dataset_phase:
             self.nextWindow = BuildingPhaseHomeScreen()
@@ -275,7 +287,7 @@ class MusicsWindow(QMainWindow):
         self.setMinimumSize(QSize(1200, 750))
 
         global is_in_building_dataset_phase
-        global training_percentage
+        global current_user_bpd_progress
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
@@ -386,7 +398,7 @@ class MusicsWindow(QMainWindow):
             progress_layout_vertical.setAlignment(Qt.AlignHCenter)
 
             # Slider value
-            self.slider_value_label = QLineEdit(str(training_percentage)+"%")
+            self.slider_value_label = QLineEdit(str(current_user_bpd_progress) + "%")
             self.slider_value_label.setReadOnly(True)
             slider_font = self.slider_value_label.font()
             slider_font.setPointSize(13)
@@ -398,7 +410,7 @@ class MusicsWindow(QMainWindow):
 
             self.progress_slider = QSlider(Qt.Horizontal)
             self.progress_slider.setMinimum(0)
-            self.progress_slider.setValue(training_percentage)  # TODO - colocar a percentagem de treino do user
+            self.progress_slider.setValue(current_user_bpd_progress)  # TODO - colocar a percentagem de treino do user
             self.progress_slider.setMaximum(100)
             self.progress_slider.setSingleStep(round(100/self.music_files_length))
             self.progress_slider.setMaximumSize(800, 40)
@@ -755,35 +767,9 @@ class MusicsWindow(QMainWindow):
 
             global data
 
-            first_write = not os.path.isfile('dataset_for_model_training.csv')  # checks if dataset file exists
+            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
 
             # If data has values, append to csv file to build the dataset
-            if data:
-                with open('dataset_for_model_training.csv', 'a', newline='') as file:
-                    writer = csv.writer(file)
-                    if first_write:
-                        header_row = ['date', 'initial_emotion', 'music_name',
-                                      'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
-
-                        for attribute in context_headers_to_dataset:
-                            header_row.append(attribute.rstrip('\r'))
-
-                        writer.writerow(header_row)
-
-                    for record in data:
-                        writer.writerow(record.values())
-            quit()
-
-    def closeEvent(self, event):
-        response = self.confirm_exit()
-        if response == QMessageBox.Yes:
-            self.music_thread.pause_music()
-            self.music_thread.exit(0)
-
-            global data
-
-            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
-            # if data has values, append to csv file to build the dataset
             if data:
                 with open('../dataset_for_model_training.csv', 'a', newline='') as file:
                     writer = csv.writer(file)
@@ -798,6 +784,98 @@ class MusicsWindow(QMainWindow):
 
                     for record in data:
                         writer.writerow(record.values())
+
+
+            #TODO - colocar isto numa função pois é chamado várias vezes
+            first_write = not os.path.isfile('../users.csv')  # checks if file exists
+            user_line_number = -1
+            progress = -1
+            global current_user_name
+            global current_user_bpd_progress
+            lines = []
+            if not first_write:
+                with open('../users.csv', 'r') as f:
+                    reader = csv.reader(f)
+                    lines = list(reader)
+                    for i, line in enumerate(lines):
+                        user_name = line[0]
+                        if user_name.lower() == current_user_name.lower():
+                            progress = line[1]
+                            user_line_number = i
+                            break
+
+            # If the current user has progress to update in the csv file
+            if progress and int(progress) != current_user_bpd_progress:
+                if user_line_number != -1:
+                    # If the user already exists, then update the progress
+                    lines[user_line_number] = [current_user_name, str(current_user_bpd_progress)]
+                else:
+                    lines.append([current_user_name, str(current_user_bpd_progress)])
+
+                with open('../users.csv', 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    if first_write:
+                        header = ['USERNAME', 'DATASET_PROGRESS']
+                        writer.writerow(header)
+                    writer.writerows(lines)
+            quit()
+
+    def closeEvent(self, event):
+        response = self.confirm_exit()
+        if response == QMessageBox.Yes:
+            self.music_thread.pause_music()
+            self.music_thread.exit(0)
+
+            global data
+
+            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
+            # if data has values, append to csv file to build the dataset
+            if data:
+                with open('../dataset_for_model_training.csv', 'a', newline='', encoding="utf-8") as file:
+                    writer = csv.writer(file)
+                    if first_write:
+                        header_row = ['date', 'initial_emotion', 'music_name',
+                                      'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
+
+                        for attribute in context_headers_to_dataset:
+                            header_row.append(attribute.rstrip('\r'))
+
+                        writer.writerow(header_row)
+
+                    for record in data:
+                        writer.writerow(record.values())
+
+            first_write = not os.path.isfile('../users.csv')  # checks if file exists
+            user_line_number = -1
+            progress = -1
+            global current_user_name
+            global current_user_bpd_progress
+            lines = []
+            if not first_write:
+                with open('../users.csv', 'r') as f:
+                    reader = csv.reader(f)
+                    lines = list(reader)
+                    for i, line in enumerate(lines):
+                        user_name = line[0]
+                        if user_name.lower() == current_user_name.lower():
+                            progress = line[1]
+                            user_line_number = i
+                            break
+
+            # If the current user has progress to update in the csv file
+            if progress and int(progress) != current_user_bpd_progress:
+                if user_line_number != -1:
+                    # If the user already exists, then update the progress
+                    lines[user_line_number] = [current_user_name, str(current_user_bpd_progress)]
+                else:
+                    lines.append([current_user_name, str(current_user_bpd_progress)])
+
+                with open('../users.csv', 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    if first_write:
+                        header = ['USERNAME', 'DATASET_PROGRESS']
+                        writer.writerow(header)
+                    writer.writerows(lines)
             event.accept()
         else:
             event.ignore()
@@ -844,12 +922,14 @@ class MusicsWindow(QMainWindow):
             context_values = context_values.split(',')
             context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
             return context_dict
+
         return {}
 
     def emotion_rated(self, emotion):
         global data
         global new_record
 
+        self.setDisabled(True)
         self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
         self.is_rating_music = False
         self.switch_layout()
@@ -863,11 +943,13 @@ class MusicsWindow(QMainWindow):
                     'instant_seconds|percentages|dominant_emotion': new_record['instant_seconds|percentages|dominant_emotion']
                     }
 
+
         context_dictionary = self.get_context()
         new_dict.update(context_dictionary)
         data.append(new_dict)
         new_record = reset_values(new_record)
 
+        self.setDisabled(False)
         # TODO - quando percentagem chegar a 100% = treino concluído, colocar novo layout
 
     def angry_button_clicked(self):
@@ -905,14 +987,12 @@ class MusicsWindow(QMainWindow):
         if not self.music_is_paused:
             global is_in_building_dataset_phase
             if is_in_building_dataset_phase:
-                self.music_thread.exit(0)
                 self.music_playing = False
                 self.emotion_thread.stop_emotions()
                 self.is_rating_music = True
                 self.switch_layout()
                 # TODO - colocar outra música, de forma aleatória
             else:
-                self.music_thread.exit(0)
                 self.emotion_thread.stop_emotions()
                 # self.music_thread.set_music('Calming relaxing music 30 seconds-.mp3')
                 # TODO - colocar outra música, de acordo com a emoção obtida e a desejada - usar o modelo
@@ -971,6 +1051,7 @@ class MusicThread(QThread):
         print("here")
         # ---------- Finished Music ----------
         self.finished_music_signal.emit()
+        self.pause_music()
 
         pass
 
@@ -1049,7 +1130,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
-        global training_percentage
+        global current_user_bpd_progress
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -1104,7 +1185,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         percentage_layout.setAlignment(Qt.AlignHCenter)
         percentage_layout.setContentsMargins(0, 0, 0, 0)
 
-        percentage = QLabel(f"{training_percentage}% complete")
+        percentage = QLabel(f"{current_user_bpd_progress}% complete")
         percentage_font = percentage.font()
         percentage_font.setPointSize(22)
         percentage.setFont(percentage_font)
@@ -1186,7 +1267,18 @@ class BuildingPhaseHomeScreen(QMainWindow):
         if file_dialog.exec_() == QFileDialog.Accepted:
             selected_file = file_dialog.selectedFiles()[0]
             print("Selected MP3 file:", selected_file)
-            return selected_file
+
+            # Get the duration in seconds
+            audio, sr = librosa.load(selected_file)
+            duration_sec = librosa.get_duration(y=audio, sr=sr)
+            if duration_sec < 150:
+                QMessageBox.warning(
+                    self, "Error", "File needs to have at least 2 minutes and 30 seconds",
+                    QMessageBox.Ok,
+                )
+                return None
+            else:
+                return selected_file
         else:
             QMessageBox.warning(
                 self, "Error", "File is not a mp3 file",
@@ -1196,16 +1288,24 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
     def add_music_button_clicked(self):
         file = self.select_mp3_file()
+        self.setDisabled(True)
 
         if file is None:
-            exit()
+            return
 
         # ---------- Uploads music ----------
         try:
             folder_name = "../BuildingDatasetPhaseMusics"
             shutil.copy2(file, folder_name)
+            predict_uploaded_music_emotions(folder_name, file.split('/')[-1],'../building_dataset_phase_musics_va')
+            self.setDisabled(False)
+            QMessageBox.information(
+                self, "Success", "Music uploaded!",
+                QMessageBox.Ok,
+            )
             # randomizeMusicOrder()
         except Exception as e:
+            self.setDisabled(False)
             QMessageBox.warning(
                 self, "Error", "Error uploading music file - " + str(e),
                 QMessageBox.Ok,
@@ -1439,12 +1539,13 @@ class ApplicationHomeScreen(QMainWindow):
 
 
 def main():
-    app = QApplication([])
+    # app = QApplication([])
     # download_musics(['https://www.youtube.com/watch?v=znWi3zN8Ucg', 'https://www.youtube.com/watch?v=tEwvUu1dBTs'], '../BuildingDatasetPhaseMusics')
-    # predict_dataset_emotions('../BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va')
+    # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
+    app = QApplication([])
     window = LoginWindow()
-    # window = MusicsWindow()
-    # window = ApplicationHomeScreen()
+    # # window = MusicsWindow()
+    # # window = ApplicationHomeScreen()
     window.show()
     app.exec()
 
