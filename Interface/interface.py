@@ -248,6 +248,9 @@ class MusicsWindow(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
+        global is_in_building_dataset_phase
+        global training_percentage
+
         self.slider_value = 10
         self.slider_value_initial_position = 0
         self.music_playing = True  # TODO - verificar quando a música está a tocar ou não para colocar o layout certo
@@ -260,14 +263,20 @@ class MusicsWindow(QMainWindow):
         self.music_is_paused = False
 
         # self.music_thread
-        self.music_thread = MusicThread('../BuildingDatasetPhaseMusics', 'Agitated music 20 seconds.mp3')
+        musics_directory = ''
+        music_name = ''
+        if is_in_building_dataset_phase:
+            musics_directory = '../BuildingDatasetPhaseMusics'
+            music_name = 'Agitated music 20 seconds.mp3'
+        else:
+            musics_directory = '../ApplicationMusics'
+            music_name = 'Sad music 1 minute.mp3'
+        self.music_thread = MusicThread(musics_directory, music_name)
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
         # global stop
         # global defined_volume
 
-        global is_in_building_dataset_phase
-        global training_percentage
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -817,18 +826,28 @@ class MusicsWindow(QMainWindow):
     #     return emotions_thread
 
     def play_next_music_clicked(self):
+        # TODO - verificar se está na fase BDP ou não, porque se não estiver a pasta das músicas vai ser diferente
+        #  temos de mudar a diretoria das músicas de acordo com a fase
+        # TODO - músicas ainda não são aleatórias na fase BDP - não sei se colocamos ou não
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
         self.music_thread.start()
         self.music_playing = True
         self.switch_layout()
 
     def music_finished(self):
+        # TODO - colocar músicas de forma dinâmica, não estática
         if not self.music_is_paused:
-            print("Music ended")
-            self.music_thread.exit(0)
-            self.music_playing = False
-            self.is_rating_music = True
-            self.switch_layout()
+            global is_in_building_dataset_phase
+            if is_in_building_dataset_phase:
+                self.music_thread.exit(0)
+                self.music_playing = False
+                self.is_rating_music = True
+                self.switch_layout()
+            else:
+                self.music_thread.exit(0)
+                # self.music_thread.set_music('Calming relaxing music 30 seconds-.mp3')
+                # TODO - colocar outra música, de acordo com a emoção obtida e a desejada - usar o modelo
+                self.music_thread.start()
 
 
 class MusicThread(QThread):
@@ -858,8 +877,11 @@ class MusicThread(QThread):
         pygame.mixer.music.set_volume(volume)
         self.defined_volume = volume
 
-    def set_new_music(self, music_name):
+    def set_music(self, music_name):
         self.music_name = music_name
+        
+    def set_directory(self, directory):
+        self.directory = directory
 
     def play_music(self, directory, music_name):
         # ---------- Initialize Pygame Mixer ----------
@@ -931,6 +953,8 @@ class BuildingPhaseHomeScreen(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
+        global training_percentage
+
         # Base Layout
         base_layout = QVBoxLayout()
         base_layout.setContentsMargins(10, 20, 10, 10)
@@ -984,7 +1008,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         percentage_layout.setAlignment(Qt.AlignHCenter)
         percentage_layout.setContentsMargins(0, 0, 0, 0)
 
-        percentage = QLabel("10% complete")
+        percentage = QLabel(f"{training_percentage}% complete")
         percentage_font = percentage.font()
         percentage_font.setPointSize(22)
         percentage.setFont(percentage_font)
