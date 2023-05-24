@@ -236,15 +236,15 @@ def stopEmotions():
 
 
 def capture_emotion(video):
-
     _, frame = video.read()
 
     result = analyze(
         frame,
         detector_backend="mtcnn",  # opencv, ssd, dlib, mtcnn, retinaface, mediapipe
         actions=['emotionDeepFace'],
-        modelPath='weights/facial_expression_model_weights.h5'
+        modelPath='../weights/facial_expression_model_weights.h5'
     )
+    print(result)
 
     return result
 # main()

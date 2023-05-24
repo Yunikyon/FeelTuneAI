@@ -1,5 +1,7 @@
+import csv
 import os
 import threading
+from datetime import datetime
 from threading import Event
 from time import sleep
 
@@ -10,7 +12,7 @@ from EmotionRecognition.EmotionDetection import capture_emotion
 
 import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect, QThread, pyqtSignal
-from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics
+from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
     QHBoxLayout, QSlider, QMessageBox, QStackedWidget
 from numpy.core.defchararray import strip
@@ -19,7 +21,22 @@ import random
 current_user_name = ''
 is_in_building_dataset_phase = True
 training_percentage = 0
-video = None
+emotionsCounter = None
+
+# datset for model training variables
+data = []
+current_music_emotions = ''
+new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '',
+              'rated_emotion': '', 'instant_seconds|percentages|dominant_emotion': ''}
+
+
+def reset_values(record):
+    record['initial_emotion'] = ''
+    record['music_name'] = ''
+    record['average_emotion'] = ''
+    record['rated_emotion'] = ''
+    return record
+
 
 class Bcolors:
     HEADER = '\033[95m'
@@ -31,6 +48,7 @@ class Bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
 
 class Color(QWidget):
     def __init__(self, color):
@@ -100,6 +118,7 @@ class CircleAnimation(QWidget):
                     self.circles[i] = (QRect(x, y, round(size), round(size)), QColor(color.red(), color.green(), color.blue(), 0))
         self.update()
 
+
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -107,9 +126,6 @@ class LoginWindow(QMainWindow):
         self.setWindowTitle("FeelTuneAI")
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
-
-        global video
-        video = cv2.VideoCapture(0)
 
         # Base Layout
         base_layout = QHBoxLayout()
@@ -261,14 +277,12 @@ class MusicsWindow(QMainWindow):
         self.slider_value_initial_position = 0
         self.music_playing = True  # TODO - verificar quando a música está a tocar ou não para colocar o layout certo
         self.is_rating_music = False  # TODO
-        # self.is_rating_music = QLineEdit()
-        # self.is_rating_music.textChanged.connect()
 
         self.stacked_widget = QStackedWidget()
 
         self.music_is_paused = False
 
-        # self.music_thread
+        # Music Thread Initialization
         musics_directory = ''
         music_name = ''
         if is_in_building_dataset_phase:
@@ -280,11 +294,9 @@ class MusicsWindow(QMainWindow):
         self.music_thread = MusicThread(musics_directory, music_name)
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
+        # Emotion Thread Initialization
         self.emotion_thread = EmotionsThread()
         self.emotion_thread.new_emotion.connect(self.new_emotion)
-        # global stop
-        # global defined_volume
-
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -353,10 +365,6 @@ class MusicsWindow(QMainWindow):
             self.music_files = os.listdir('../BuildingDatasetPhaseMusics')
             self.music_files_length = len(self.music_files)
 
-            # ---------- Threads initialization ----------
-            # self.current_music_thread = self.playThread(self, '../BuildingDatasetPhaseMusics', self.music_files[0])
-            # self.current_emotion_thread = self.emotionsThread()
-
             if self.music_files_length == 0:
                 print(f"{Bcolors.WARNING} Music files length is zero" + Bcolors.ENDC)
                 exit()
@@ -405,9 +413,10 @@ class MusicsWindow(QMainWindow):
 
             base_layout.addWidget(progress_layout_vertical_widget)
 
-        # if self.music_playing:
+        # --- Animation widget
         animation_layout = QVBoxLayout()
         animation_layout.setAlignment(Qt.AlignHCenter)
+
         # Circles animation
         circle_layout = QHBoxLayout()
         circle_layout.setAlignment(Qt.AlignHCenter)
@@ -465,7 +474,6 @@ class MusicsWindow(QMainWindow):
 
         animation_layout.addWidget(circle_widget)
 
-
         # Buttons
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -501,11 +509,10 @@ class MusicsWindow(QMainWindow):
 
         animation_widget = QWidget()
         animation_widget.setLayout(animation_layout)
-        self.stacked_widget.addWidget(animation_widget)  # TODO 1 Layout
-        # base_layout.addWidget(buttons_widget)
+        self.stacked_widget.addWidget(animation_widget)
+        # --- End of Animation widget
 
-        # else:  # Music finished playing
-        #     if self.is_rating_music:
+        # --- Rating widget
         rating_layout = QVBoxLayout()
         rating_layout.setAlignment(Qt.AlignHCenter)
 
@@ -594,13 +601,11 @@ class MusicsWindow(QMainWindow):
         first_line_widget.setLayout(first_line_layout)
         first_line_widget.setMaximumSize(2000, 80)
         rating_layout.addWidget(first_line_widget)
-        # base_layout.addWidget(first_line_widget)
 
         # Blank space four
         blank_space_four = QLabel()
         blank_space_four.setMaximumSize(10, 30)
         rating_layout.addWidget(blank_space_four)
-        # base_layout.addWidget(blank_space_four)
 
         # Second Line of buttons
         second_line_layout = QHBoxLayout()
@@ -621,7 +626,7 @@ class MusicsWindow(QMainWindow):
         second_line_layout.addWidget(neutral_button)
 
         # Surprised button
-        surprised_button = QPushButton("Disgust")
+        surprised_button = QPushButton("Surprised")
         surprised_button.setMinimumSize(150, 80)
         surprised_font = surprised_button.font()
         surprised_font.setPixelSize(25)
@@ -648,19 +653,18 @@ class MusicsWindow(QMainWindow):
         second_line_widget.setLayout(second_line_layout)
         second_line_widget.setMaximumSize(2000, 80)
         rating_layout.addWidget(second_line_widget)
-        # base_layout.addWidget(second_line_widget)
 
         # Blank space five
         blank_space_five = QLabel()
         blank_space_five.setMaximumSize(10, 800)
         rating_layout.addWidget(blank_space_five)
-        # base_layout.addWidget(blank_space_five)
 
         rating_widget = QWidget()
         rating_widget.setLayout(rating_layout)
         self.stacked_widget.addWidget(rating_widget)
+        # --- End of Rating widget
 
-            # else:  # Button Play for next music
+        # --- Play Next Music widget
         play_next_layout = QVBoxLayout()
         play_next_layout.setAlignment(Qt.AlignHCenter)
 
@@ -687,7 +691,6 @@ class MusicsWindow(QMainWindow):
         play_widget.setLayout(play_layout)
         play_widget.setMaximumSize(2000, 120)
         play_next_layout.addWidget(play_widget)
-        # base_layout.addWidget(play_widget)
 
         # Blank space five
         blank_space_five = QLabel()
@@ -697,7 +700,7 @@ class MusicsWindow(QMainWindow):
         play_next_widget = QWidget()
         play_next_widget.setLayout(play_next_layout)
         self.stacked_widget.addWidget(play_next_widget)
-        # base_layout.addWidget(blank_space_five)
+        # --- End of Play Next Music widget
 
         base_layout.addWidget(self.stacked_widget)
         self.switch_layout()
@@ -727,18 +730,69 @@ class MusicsWindow(QMainWindow):
             self.music_is_paused = False
             self.pause_button.setText("Pause")
 
-    def quit_button_clicked(self):
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Warning")
-        dlg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
-        dlg.setText("You're about to leave the application.\n Are you sure?")
-        dlg.setIcon(QMessageBox.Warning)
-        button_clicked = dlg.exec()
+    def confirm_exit(self):
+        reply = QMessageBox.warning(
+            self, "Confirm Exit", "You're about to leave the application.\n Are you sure?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        return reply
 
-        if button_clicked == QMessageBox.Yes:
+
+    def quit_button_clicked(self):
+        reply = self.confirm_exit()
+
+        if reply == QMessageBox.Yes:
             self.music_thread.pause_music()
             self.music_thread.exit(0)
+
+            global data
+
+            first_write = not os.path.isfile('dataset_for_model_training.csv')  # checks if dataset file exists
+
+            # If data has values, append to csv file to build the dataset
+            if data:
+                with open('dataset_for_model_training.csv', 'a', newline='') as file:
+                    writer = csv.writer(file)
+                    if first_write:
+                        header_row = ['date', 'initial_emotion', 'music_name',
+                                      'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
+
+                        for attribute in context_headers_to_dataset:
+                            header_row.append(attribute.rstrip('\r'))
+
+                        writer.writerow(header_row)
+
+                    for record in data:
+                        writer.writerow(record.values())
             quit()
+
+    def closeEvent(self, event):
+        response = self.confirm_exit()
+        if response == QMessageBox.Yes:
+            self.music_thread.pause_music()
+            self.music_thread.exit(0)
+
+            global data
+
+            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
+            # if data has values, append to csv file to build the dataset
+            if data:
+                with open('../dataset_for_model_training.csv', 'a', newline='') as file:
+                    writer = csv.writer(file)
+                    if first_write:
+                        header_row = ['date', 'initial_emotion', 'music_name',
+                                      'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
+
+                        # for attribute in context_headers_to_dataset:
+                        #     header_row.append(attribute.rstrip('\r'))
+
+                        writer.writerow(header_row)
+
+                    for record in data:
+                        writer.writerow(record.values())
+            event.accept()
+        else:
+            event.ignore()
 
     class PaintLine(QWidget):
         def paintEvent(self, event):
@@ -784,46 +838,51 @@ class MusicsWindow(QMainWindow):
             return context_dict
         return {}
 
-    def angry_button_clicked(self):
+    def emotion_rated(self, emotion):
+        global data
+        global new_record
+
         self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
         self.is_rating_music = False
         self.switch_layout()
+
+        current_time = datetime.now().strftime("%d/%m/%YT%H:%M:%S")  # gets record data
+
+        new_dict = {'date': current_time, 'initial_emotion': new_record['initial_emotion'],
+                    'music_name': new_record['music_name'],
+                    'last_emotion': new_record['last_emotion'],
+                    'rated_emotion': emotion,
+                    'instant_seconds|percentages|dominant_emotion': new_record['instant_seconds|percentages|dominant_emotion']
+                    }
+        data.append(new_dict)
+        new_record = reset_values(new_record)
+
+    def angry_button_clicked(self):
+        self.emotion_rated("angry")
         print("TODO")  # TODO - quando percentagem chegar a 100% = treino concluído, colocar novo layout
 
     def disgust_button_clicked(self):
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
-        self.is_rating_music = False
-        self.switch_layout()
+        self.emotion_rated("disgust")
         print("TODO")  # TODO
 
     def fear_button_clicked(self):
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
-        self.is_rating_music = False
-        self.switch_layout()
+        self.emotion_rated("fear")
         print("TODO")  # TODO
 
     def sad_button_clicked(self):
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
-        self.is_rating_music = False
-        self.switch_layout()
+        self.emotion_rated("sad")
         print("TODO")  # TODO
 
     def neutral_button_clicked(self):
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
-        self.is_rating_music = False
-        self.switch_layout()
+        self.emotion_rated("neutral")
         print("TODO")  # TODO
 
     def surprise_button_clicked(self):
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
-        self.is_rating_music = False
-        self.switch_layout()
+        self.emotion_rated("surprise")
         print("TODO")  # TODO
 
     def happy_button_clicked(self):
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
-        self.is_rating_music = False
-        self.switch_layout()
+        self.emotion_rated("happy")
         print("TODO")  # TODO
 
     def play_next_music_clicked(self):
@@ -831,6 +890,9 @@ class MusicsWindow(QMainWindow):
         #  temos de mudar a diretoria das músicas de acordo com a fase
         # TODO - músicas ainda não são aleatórias na fase BDP - não sei se colocamos ou não
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
+        global new_record
+
+        new_record['music_name'] = 'Agitated music 20 seconds.mp3'
         self.music_thread.start()
         self.music_playing = True
         self.switch_layout()
@@ -842,10 +904,12 @@ class MusicsWindow(QMainWindow):
             if is_in_building_dataset_phase:
                 self.music_thread.exit(0)
                 self.music_playing = False
+                self.emotion_thread.stop_emotions()
                 self.is_rating_music = True
                 self.switch_layout()
             else:
                 self.music_thread.exit(0)
+                self.emotion_thread.stop_emotions()
                 # self.music_thread.set_music('Calming relaxing music 30 seconds-.mp3')
                 # TODO - colocar outra música, de acordo com a emoção obtida e a desejada - usar o modelo
                 self.music_thread.start()
@@ -899,11 +963,6 @@ class MusicThread(QThread):
         while pygame.mixer.music.get_busy() or self.music_is_paused:
             pygame.time.wait(100)
 
-            # ---------- If user closes program or cancel ----------
-            # if self.stop.is_set():
-            #     pygame.mixer.music.stop()
-            #     break
-
         # ---------- Finished Music ----------
         self.finished_music_signal.emit()
 
@@ -917,18 +976,33 @@ class EmotionsThread(QThread):
         super().__init__(parent)
 
         self.emotions_running = False
-        global video
+        self.video = cv2.VideoCapture(0)
+
 
     def stop_emotions(self):
+        global current_music_emotions
+        global new_record
+
         self.emotions_running = False
+        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]
+        new_record['last_emotion'] = last_emotion
+        new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions
+
+    def append_emotion(self, dominant_emotion, time, percentages):
+        global current_music_emotions
+        if dominant_emotion != 'Not Found':
+            current_music_emotions += str(time) + '|' + percentages + '|' + dominant_emotion + ';'
+
+        # ---------- Update initial emotion ----------
+        if new_record['initial_emotion'] == '':
+            if dominant_emotion != 'Not Found':
+                new_record['initial_emotion'] = dominant_emotion
 
     def run(self):
-        global video
         self.emotions_running = True
+
         # Start emotion recognition
         music_time = 6
-
-        # ---------- gui.py variables initialization ----------
 
         global emotionsCounter
         emotionsCounter = {"angry": 0,
@@ -940,16 +1014,16 @@ class EmotionsThread(QThread):
                            "neutral": 0}
 
         while self.emotions_running:
-            result = capture_emotion(video)
+            result = capture_emotion(self.video)
 
             # ---------- Round emotions values ----------
             percentages = ''
             for emotion in result['emotion']:
                 percentages += str(round(result['emotion'][emotion], 3))
-                if emotion != 'neutral':
+                if emotion != 'neutral': # last emotion
                     percentages += '-'
 
-            self.new_emotion.emit({"emotion": result['dominant_emotion'], "time": music_time, "percentages": percentages})
+            self.append_emotion(result['dominant_emotion'], music_time, percentages)
 
             # ---------- Updates Counters ----------
             if result['dominant_emotion'] != 'Not Found':
@@ -1090,12 +1164,16 @@ class BuildingPhaseHomeScreen(QMainWindow):
         self.setCentralWidget(base_widget)
 
     def continue_button_clicked(self):
+        global new_record
+
+        new_record['music_name'] = 'Agitated music 20 seconds.mp3'
+
         self.nextWindow = MusicsWindow()
         self.nextWindow.show()
         self.close()
 
     def add_music_button_clicked(self):
-        print("TODO") #TODO
+        print("TODO")  # TODO
 
 
 class QuadrantWidget(QWidget):
