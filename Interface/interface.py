@@ -258,8 +258,8 @@ class LoginWindow(QMainWindow):
         if progress == 100:
             is_in_building_dataset_phase = False
 
-        # global current_user_bpd_progress
-        # current_user_bpd_progress = progress
+        global current_user_bpd_progress
+        current_user_bpd_progress = progress
 
         if is_in_building_dataset_phase:
             self.nextWindow = BuildingPhaseHomeScreen()
