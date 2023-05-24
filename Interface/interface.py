@@ -3,8 +3,10 @@ import threading
 from threading import Event
 from time import sleep
 
+import cv2
+
 import context.main as contextMain
-from EmotionRecognition.EmotionDetection import main as emotionDetectionMain, stopEmotions
+from EmotionRecognition.EmotionDetection import capture_emotion
 
 import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect, QThread, pyqtSignal
@@ -17,6 +19,7 @@ import random
 current_user_name = ''
 is_in_building_dataset_phase = True
 training_percentage = 0
+video = None
 
 class Bcolors:
     HEADER = '\033[95m'
@@ -104,6 +107,9 @@ class LoginWindow(QMainWindow):
         self.setWindowTitle("FeelTuneAI")
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
+
+        global video
+        video = cv2.VideoCapture(0)
 
         # Base Layout
         base_layout = QHBoxLayout()
@@ -274,6 +280,8 @@ class MusicsWindow(QMainWindow):
         self.music_thread = MusicThread(musics_directory, music_name)
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
+        self.emotion_thread = EmotionsThread()
+        self.emotion_thread.new_emotion.connect(self.new_emotion)
         # global stop
         # global defined_volume
 
@@ -752,6 +760,7 @@ class MusicsWindow(QMainWindow):
         if self.music_playing:
             self.stacked_widget.setCurrentIndex(0)
             self.music_thread.start()
+            self.emotion_thread.start()
         else:
             if self.is_rating_music:
                 self.stacked_widget.setCurrentIndex(1)
@@ -817,14 +826,6 @@ class MusicsWindow(QMainWindow):
         self.switch_layout()
         print("TODO")  # TODO
 
-    # def playThread(self, directory, music_name):
-    #     play_thread = threading.Thread(target=self.playMusic, args=(self, directory, music_name,))
-    #     return play_thread
-    #
-    # def emotionsThread(self):
-    #     emotions_thread = threading.Thread(target=emotionDetectionMain, args=(self,))
-    #     return emotions_thread
-
     def play_next_music_clicked(self):
         # TODO - verificar se está na fase BDP ou não, porque se não estiver a pasta das músicas vai ser diferente
         #  temos de mudar a diretoria das músicas de acordo com a fase
@@ -849,20 +850,20 @@ class MusicsWindow(QMainWindow):
                 # TODO - colocar outra música, de acordo com a emoção obtida e a desejada - usar o modelo
                 self.music_thread.start()
 
+    def new_emotion(self, result):
+        print(result)
+
 
 class MusicThread(QThread):
-    my_signal = pyqtSignal()
     finished_music_signal = pyqtSignal()
 
     def __init__(self, directory, music_name, parent=None):
         super().__init__(parent)
 
-        # self.stop = Event()
-        self.defined_volume = -1
-
         self.directory = directory
         self.music_name = music_name
 
+        self.defined_volume = -1
         self.music_is_paused = False
 
     def pause_music(self):
@@ -883,38 +884,7 @@ class MusicThread(QThread):
     def set_directory(self, directory):
         self.directory = directory
 
-    def play_music(self, directory, music_name):
-        # ---------- Initialize Pygame Mixer ----------
-        pygame.mixer.init()
-        pygame.mixer.music.load(directory + '/' + music_name)
-
-        if self.defined_volume != -1:
-            self.set_volume(self.defined_volume)
-        else:
-            self.set_volume(0.2)
-
-        # self.stop.clear()
-
-        pygame.mixer.music.play()  # plays music
-
-        # ---------- Waits for the music to end ----------
-        while pygame.mixer.music.get_busy() and not self.music_is_paused:
-            pygame.time.wait(100)
-            print(self.music_is_paused)
-
-            # ---------- If user closes program or cancel ----------
-            # if self.stop.is_set():
-            #     pygame.mixer.music.stop()
-            #     break
-
-        # ---------- Finished Music ----------
-        # try:
-        self.finished_music_signal.emit()
-        # except:
-        #     "ignore"  # tk error, from tkinder library we're not using
-
     def run(self):
-        # do something here
         # ---------- Initialize Pygame Mixer ----------
         pygame.mixer.init()
         pygame.mixer.music.load(self.directory + '/' + self.music_name)
@@ -923,9 +893,6 @@ class MusicThread(QThread):
             self.set_volume(self.defined_volume)
         else:
             self.set_volume(0.2)
-
-        # self.stop.clear()
-
         pygame.mixer.music.play()  # plays music
 
         # ---------- Waits for the music to end ----------
@@ -938,10 +905,59 @@ class MusicThread(QThread):
             #     break
 
         # ---------- Finished Music ----------
-        # try:
         self.finished_music_signal.emit()
-        # except:
-        #     "ignore"  # tk error, from tkinder library we're not using
+
+        pass
+
+
+class EmotionsThread(QThread):
+    new_emotion = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.emotions_running = False
+        global video
+
+    def stop_emotions(self):
+        self.emotions_running = False
+
+    def run(self):
+        global video
+        self.emotions_running = True
+        # Start emotion recognition
+        music_time = 6
+
+        # ---------- gui.py variables initialization ----------
+
+        global emotionsCounter
+        emotionsCounter = {"angry": 0,
+                           "disgust": 0,
+                           "fear": 0,
+                           "happy": 0,
+                           "sad": 0,
+                           "surprise": 0,
+                           "neutral": 0}
+
+        while self.emotions_running:
+            result = capture_emotion(video)
+
+            # ---------- Round emotions values ----------
+            percentages = ''
+            for emotion in result['emotion']:
+                percentages += str(round(result['emotion'][emotion], 3))
+                if emotion != 'neutral':
+                    percentages += '-'
+
+            self.new_emotion.emit({"emotion": result['dominant_emotion'], "time": music_time, "percentages": percentages})
+
+            # ---------- Updates Counters ----------
+            if result['dominant_emotion'] != 'Not Found':
+                emotionsCounter[result['dominant_emotion']] += 1
+
+            sleep(1)
+            music_time += 3
+
         pass
 
 

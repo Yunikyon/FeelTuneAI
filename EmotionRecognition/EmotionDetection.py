@@ -1,6 +1,8 @@
 import warnings
 from threading import Event
 
+from PyQt5.QtCore import QThread
+
 warnings.filterwarnings("ignore")
 import time
 import cv2
@@ -233,62 +235,16 @@ def stopEmotions():
     return max(emotionsCounter, key=emotionsCounter.get)
 
 
-def main(window):
-    # ---------------------------
-    # main
+def capture_emotion(video):
 
-    import matplotlib.pyplot as plt
-    from tensorflow.keras.preprocessing import image
+    _, frame = video.read()
 
-    musicTime = 6
-    video = cv2.VideoCapture(0)
+    result = analyze(
+        frame,
+        detector_backend="mtcnn",  # opencv, ssd, dlib, mtcnn, retinaface, mediapipe
+        actions=['emotionDeepFace'],
+        modelPath='weights/facial_expression_model_weights.h5'
+    )
 
-    # ---------- gui.py variables initialization ----------
-    stop_main_emotions.clear()
-
-    global emotionsCounter
-    emotionsCounter = {"angry": 0,
-                       "disgust": 0,
-                       "fear": 0,
-                       "happy": 0,
-                       "sad": 0,
-                       "surprise": 0,
-                       "neutral": 0}
-
-    while True:
-        _, frame = video.read()
-
-        result = analyze(
-            frame,
-            detector_backend="mtcnn",  # opencv, ssd, dlib, mtcnn, retinaface, mediapipe
-            actions=['emotionDeepFace'],
-            modelPath='weights/facial_expression_model_weights.h5'
-        )
-
-        print(result)
-
-        # ---------- Round emotions values ----------
-        percentages = ''
-        for emotion in result['emotion']:
-            percentages += str(round(result['emotion'][emotion], 3))
-            if emotion != 'neutral':
-                percentages += '-'
-
-        try:
-            window.write_event_value("New Emotion", {"emotion": result['dominant_emotion'],
-                                                     "time": musicTime,
-                                                     "percentages": percentages})
-        except:
-            'ignore'  # tk error, from tkinder library we're not using
-
-        # ---------- Updates Counters ----------
-        if result['dominant_emotion'] != 'Not Found':
-            emotionsCounter[result['dominant_emotion']] += 1
-
-        time.sleep(1)
-        musicTime += 3
-
-        if stop_main_emotions.is_set():
-            print('STOP EMOTIONS')
-            break
+    return result
 # main()
