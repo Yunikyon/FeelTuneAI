@@ -16,8 +16,9 @@ import json
 
 def get_ipma_data():
     response = getJsonResponseFromUrl("http://api.ipma.pt/open-data/forecast/meteorology/cities/daily/hp-daily-forecast-day0.json")
-    if response is None:
+    if not response.ok:
         return None
+    response = response.json()
     date = response['forecastDate']
     forecast_data = response['data']
     global_ids_local = getGlobalIdLocal()

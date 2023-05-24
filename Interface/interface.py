@@ -28,7 +28,7 @@ data = []
 current_music_emotions = ''
 new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '',
               'rated_emotion': '', 'instant_seconds|percentages|dominant_emotion': ''}
-
+context_headers_to_dataset = ""
 
 def reset_values(record):
     record['initial_emotion'] = ''
@@ -783,8 +783,8 @@ class MusicsWindow(QMainWindow):
                         header_row = ['date', 'initial_emotion', 'music_name',
                                       'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
 
-                        # for attribute in context_headers_to_dataset:
-                        #     header_row.append(attribute.rstrip('\r'))
+                        for attribute in context_headers_to_dataset:
+                            header_row.append(attribute.rstrip('\r'))
 
                         writer.writerow(header_row)
 
@@ -854,6 +854,9 @@ class MusicsWindow(QMainWindow):
                     'rated_emotion': emotion,
                     'instant_seconds|percentages|dominant_emotion': new_record['instant_seconds|percentages|dominant_emotion']
                     }
+
+        context_dictionary = self.get_context()
+        new_dict.update(context_dictionary)
         data.append(new_dict)
         new_record = reset_values(new_record)
 
