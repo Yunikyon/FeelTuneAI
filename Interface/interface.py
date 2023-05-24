@@ -76,7 +76,7 @@ class CircleAnimation(QWidget):
         x = random.randint(150, width - 150)
         y = random.randint(120, height - 120)
         color = QColor(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        self.circles.append((QRect(x, y, 1, 1), color))  # TODO - change for emotions
+        self.circles.append((QRect(x, y, 1, 1), color))
         self.update()
 
 
@@ -275,8 +275,8 @@ class MusicsWindow(QMainWindow):
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
-        self.music_playing = True  # TODO - verificar quando a música está a tocar ou não para colocar o layout certo
-        self.is_rating_music = False  # TODO
+        self.music_playing = True
+        self.is_rating_music = False
 
         self.stacked_widget = QStackedWidget()
 
@@ -366,11 +366,15 @@ class MusicsWindow(QMainWindow):
             self.music_files_length = len(self.music_files)
 
             if self.music_files_length == 0:
-                print(f"{Bcolors.WARNING} Music files length is zero" + Bcolors.ENDC)
+                print(f"{Bcolors.WARNING} BDP music files length is zero" + Bcolors.ENDC)
                 exit()
         else:  # Read application musics
-            self.music_files_length = 1
-            print("TODO")  # TODO
+            self.music_files = os.listdir('../ApplicationMusics')
+            self.music_files_length = len(self.music_files)
+
+            if self.music_files_length == 0:
+                print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
+                exit()
 
         if is_in_building_dataset_phase:
             # Training Progress Slider
@@ -860,38 +864,30 @@ class MusicsWindow(QMainWindow):
         data.append(new_dict)
         new_record = reset_values(new_record)
 
+        # TODO - quando percentagem chegar a 100% = treino concluído, colocar novo layout
+
     def angry_button_clicked(self):
         self.emotion_rated("angry")
-        print("TODO")  # TODO - quando percentagem chegar a 100% = treino concluído, colocar novo layout
 
     def disgust_button_clicked(self):
         self.emotion_rated("disgust")
-        print("TODO")  # TODO
 
     def fear_button_clicked(self):
         self.emotion_rated("fear")
-        print("TODO")  # TODO
 
     def sad_button_clicked(self):
         self.emotion_rated("sad")
-        print("TODO")  # TODO
 
     def neutral_button_clicked(self):
         self.emotion_rated("neutral")
-        print("TODO")  # TODO
 
     def surprise_button_clicked(self):
         self.emotion_rated("surprise")
-        print("TODO")  # TODO
 
     def happy_button_clicked(self):
         self.emotion_rated("happy")
-        print("TODO")  # TODO
 
     def play_next_music_clicked(self):
-        # TODO - verificar se está na fase BDP ou não, porque se não estiver a pasta das músicas vai ser diferente
-        #  temos de mudar a diretoria das músicas de acordo com a fase
-        # TODO - músicas ainda não são aleatórias na fase BDP - não sei se colocamos ou não
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
         global new_record
 
@@ -910,6 +906,7 @@ class MusicsWindow(QMainWindow):
                 self.emotion_thread.stop_emotions()
                 self.is_rating_music = True
                 self.switch_layout()
+                # TODO - colocar outra música, de forma aleatória
             else:
                 self.music_thread.exit(0)
                 self.emotion_thread.stop_emotions()
