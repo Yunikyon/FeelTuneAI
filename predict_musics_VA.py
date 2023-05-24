@@ -1,11 +1,13 @@
 from __future__ import unicode_literals
+
+import csv
 import os
 import numpy as np
 import librosa
 import joblib
 
 
-def predict_dataset_emotions(directory):
+def predict_dataset_emotions(directory, csv_name):
     # Get all files in the directory
     files = os.listdir(directory)
 
@@ -140,9 +142,18 @@ def predict_dataset_emotions(directory):
     #TODO - guardar em dataset - músicas + VA
     print(f'\tValence: {valence}.\n')
     print(f'\tArousal: {arousal}.\n')
-    # print(files[0])
-    # print(files[1])
-    print('-------------------------------------------------------\n')
+
+    # Write to csv
+    with open(f'{csv_name}.csv', 'w+', newline='') as file:
+        writer = csv.writer(file)
+        header_row = ['music_name', 'valence', 'arousal']
+
+        writer.writerow(header_row)
+
+        i = 0
+        for music in files:
+            writer.writerow([music, valence[i], arousal[i]])
+            i += 1
 
 
-predict_dataset_emotions('musics_to_classify')
+# predict_dataset_emotions('musics_to_classify', 'musics_classified')

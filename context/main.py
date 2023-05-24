@@ -28,7 +28,7 @@ def execute():
     df['distance'] = df.apply(lambda row: geodesic((latitude, longitude), (row['latitude'], row['longitude'])).km, axis=1) # km -> to return in km, axis = 1 -> apply to each row
     closest_city = df.loc[df['distance'].idxmin()]['local']
     print(f"Closest city: {closest_city}")
-    df_mylocation = df[df['local'] == closest_city]
+    df_mylocation = df[df['local'] == 'Leiria']
 
     values = []
     for index, row in df_mylocation.iterrows():

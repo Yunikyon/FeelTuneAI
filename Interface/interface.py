@@ -1,5 +1,6 @@
 import csv
 import os
+import shutil
 import threading
 from datetime import datetime
 from threading import Event
@@ -14,9 +15,12 @@ import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
-    QHBoxLayout, QSlider, QMessageBox, QStackedWidget
+    QHBoxLayout, QSlider, QMessageBox, QStackedWidget, QFileDialog
 from numpy.core.defchararray import strip
 import random
+
+from download_from_yt import download_musics
+from predict_musics_VA import predict_dataset_emotions
 
 current_user_name = ''
 is_in_building_dataset_phase = True
@@ -287,7 +291,7 @@ class MusicsWindow(QMainWindow):
         music_name = ''
         if is_in_building_dataset_phase:
             musics_directory = '../BuildingDatasetPhaseMusics'
-            music_name = 'Agitated music 20 seconds.mp3'
+            music_name = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
         else:
             musics_directory = '../ApplicationMusics'
             music_name = 'Sad music 1 minute.mp3'
@@ -891,7 +895,7 @@ class MusicsWindow(QMainWindow):
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
         global new_record
 
-        new_record['music_name'] = 'Agitated music 20 seconds.mp3'
+        new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
         self.music_thread.start()
         self.music_playing = True
         self.switch_layout()
@@ -959,10 +963,12 @@ class MusicThread(QThread):
             self.set_volume(0.2)
         pygame.mixer.music.play()  # plays music
 
-        # ---------- Waits for the music to end ----------
-        while pygame.mixer.music.get_busy() or self.music_is_paused:
-            pygame.time.wait(100)
+        # ---------- Waits for the music to end ---------- # TODO - descomentar para versão final, só queremos testar agora com 30 segundos
+        # while pygame.mixer.music.get_busy() or self.music_is_paused:
+        #     pygame.time.wait(100)
 
+        pygame.time.wait(30000)
+        print("here")
         # ---------- Finished Music ----------
         self.finished_music_signal.emit()
 
@@ -1166,14 +1172,44 @@ class BuildingPhaseHomeScreen(QMainWindow):
     def continue_button_clicked(self):
         global new_record
 
-        new_record['music_name'] = 'Agitated music 20 seconds.mp3'
+        new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
 
         self.nextWindow = MusicsWindow()
         self.nextWindow.show()
         self.close()
 
+    def select_mp3_file(self):
+        file_dialog = QFileDialog()
+        file_dialog.setFileMode(QFileDialog.ExistingFile)
+        file_dialog.setNameFilter("MP3 Files (*.mp3)")
+
+        if file_dialog.exec_() == QFileDialog.Accepted:
+            selected_file = file_dialog.selectedFiles()[0]
+            print("Selected MP3 file:", selected_file)
+            return selected_file
+        else:
+            QMessageBox.warning(
+                self, "Error", "File is not a mp3 file",
+                QMessageBox.Ok,
+            )
+            return None
+
     def add_music_button_clicked(self):
-        print("TODO")  # TODO
+        file = self.select_mp3_file()
+
+        if file is None:
+            exit()
+
+        # ---------- Uploads music ----------
+        try:
+            folder_name = "../BuildingDatasetPhaseMusics"
+            shutil.copy2(file, folder_name)
+            # randomizeMusicOrder()
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Error", "Error uploading music file - " + str(e),
+                QMessageBox.Ok,
+            )
 
 
 class QuadrantWidget(QWidget):
@@ -1404,6 +1440,8 @@ class ApplicationHomeScreen(QMainWindow):
 
 def main():
     app = QApplication([])
+    # download_musics(['https://www.youtube.com/watch?v=znWi3zN8Ucg', 'https://www.youtube.com/watch?v=tEwvUu1dBTs'], '../BuildingDatasetPhaseMusics')
+    # predict_dataset_emotions('../BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va')
     window = LoginWindow()
     # window = MusicsWindow()
     # window = ApplicationHomeScreen()
