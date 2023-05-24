@@ -250,12 +250,14 @@ class MusicsWindow(QMainWindow):
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
-        self.music_playing = False  # TODO - verificar quando a música está a tocar ou não para colocar o layout certo
+        self.music_playing = True  # TODO - verificar quando a música está a tocar ou não para colocar o layout certo
         self.is_rating_music = False  # TODO
         # self.is_rating_music = QLineEdit()
         # self.is_rating_music.textChanged.connect()
 
         self.stacked_widget = QStackedWidget()
+
+        self.music_is_paused = False
 
         # self.music_thread
         self.music_thread = MusicThread('../BuildingDatasetPhaseMusics', 'Agitated music 20 seconds.mp3')
@@ -363,9 +365,9 @@ class MusicsWindow(QMainWindow):
 
             self.progress_slider = QSlider(Qt.Horizontal)
             self.progress_slider.setMinimum(0)
-            self.progress_slider.setValue(training_percentage)
+            self.progress_slider.setValue(training_percentage)  # TODO - colocar a percentagem de treino do user
             self.progress_slider.setMaximum(100)
-            self.progress_slider.setSingleStep(round(100/self.music_files_length)) #TODO - dividir pelo número de músicas do dataset de treino
+            self.progress_slider.setSingleStep(round(100/self.music_files_length))
             self.progress_slider.setMaximumSize(800, 40)
             self.progress_slider.setStyleSheet("QSlider::groove:horizontal "
                                           "{border: 1px solid #999999; height: 8px;"
@@ -377,7 +379,7 @@ class MusicsWindow(QMainWindow):
                                           "QSlider::add-page:horizontal {background: white}"
                                           "QSlider::sub-page:horizontal {background: #ffd7ab}")
             self.progress_slider.valueChanged.connect(self.slider_value_changed)
-            # self.progress_slider.setEnabled(False)  #TODO - colocar sem ser comentário - só mudar o valor do slider quando acabar música e for avaliada pelo user
+            self.progress_slider.setEnabled(False)
 
             progress_layout_vertical.addWidget(self.progress_slider)
             progress_layout_vertical_widget = QWidget()
@@ -464,15 +466,16 @@ class MusicsWindow(QMainWindow):
         quit_button.clicked.connect(self.quit_button_clicked)
         buttons_layout.addWidget(quit_button)
 
-        # Stop Quit
-        stop_button = QPushButton("Stop")
-        stop_button.setMinimumSize(120, 60)
-        stop_font = stop_button.font()
+        # Button pause
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.setMinimumSize(120, 60)
+        stop_font = self.pause_button.font()
         stop_font.setPixelSize(25)
-        stop_button.setFont(stop_font)
-        stop_button.setStyleSheet("* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        stop_button.setCursor(QCursor(Qt.PointingHandCursor))
-        buttons_layout.addWidget(stop_button)
+        self.pause_button.setFont(stop_font)
+        self.pause_button.setStyleSheet("* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+        self.pause_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.pause_button.clicked.connect(self.pause_button_clicked)
+        buttons_layout.addWidget(self.pause_button)
 
         buttons_widget = QWidget()
         buttons_widget.setLayout(buttons_layout)
@@ -613,7 +616,7 @@ class MusicsWindow(QMainWindow):
         second_line_layout.addWidget(surprised_button)
 
         # Happy button
-        happy_button = QPushButton("Fear")
+        happy_button = QPushButton("Happy")
         happy_button.setMinimumSize(150, 80)
         happy_font = happy_button.font()
         happy_font.setPixelSize(25)
@@ -695,8 +698,17 @@ class MusicsWindow(QMainWindow):
         self.slider_value_label.move(QPoint(190 + round(int(value_number) * 7.7), 14))
 
     def volume_slider_value_changed(self, value):
-        print("TODO")  #TODO
-        self.music_thread.set_volume(value)
+        self.music_thread.set_volume(value/100)
+
+    def pause_button_clicked(self):
+        if self.pause_button.text() == "Pause":
+            self.music_thread.pause_music()
+            self.music_is_paused = True
+            self.pause_button.setText("Resume")
+        else:
+            self.music_thread.resume_music()
+            self.music_is_paused = False
+            self.pause_button.setText("Pause")
 
     def quit_button_clicked(self):
         dlg = QMessageBox(self)
@@ -707,6 +719,8 @@ class MusicsWindow(QMainWindow):
         button_clicked = dlg.exec()
 
         if button_clicked == QMessageBox.Yes:
+            self.music_thread.pause_music()
+            self.music_thread.exit(0)
             quit()
 
     class PaintLine(QWidget):
@@ -728,6 +742,7 @@ class MusicsWindow(QMainWindow):
     def switch_layout(self):
         if self.music_playing:
             self.stacked_widget.setCurrentIndex(0)
+            self.music_thread.start()
         else:
             if self.is_rating_music:
                 self.stacked_widget.setCurrentIndex(1)
@@ -752,24 +767,45 @@ class MusicsWindow(QMainWindow):
         return {}
 
     def angry_button_clicked(self):
-        print("TODO")  # TODO
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
+        print("TODO")  # TODO - quando percentagem chegar a 100% = treino concluído, colocar novo layout
 
     def disgust_button_clicked(self):
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
         print("TODO")  # TODO
 
     def fear_button_clicked(self):
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
         print("TODO")  # TODO
 
     def sad_button_clicked(self):
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
         print("TODO")  # TODO
 
     def neutral_button_clicked(self):
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
         print("TODO")  # TODO
 
     def surprise_button_clicked(self):
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
         print("TODO")  # TODO
 
     def happy_button_clicked(self):
+        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
+        self.is_rating_music = False
+        self.switch_layout()
         print("TODO")  # TODO
 
     # def playThread(self, directory, music_name):
@@ -783,13 +819,16 @@ class MusicsWindow(QMainWindow):
     def play_next_music_clicked(self):
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
         self.music_thread.start()
-
-    def music_finished(self):
-        print("Music ended")
-        self.music_thread.exit(0)
-        self.is_rating_music = True
+        self.music_playing = True
         self.switch_layout()
 
+    def music_finished(self):
+        if not self.music_is_paused:
+            print("Music ended")
+            self.music_thread.exit(0)
+            self.music_playing = False
+            self.is_rating_music = True
+            self.switch_layout()
 
 
 class MusicThread(QThread):
@@ -805,9 +844,15 @@ class MusicThread(QThread):
         self.directory = directory
         self.music_name = music_name
 
-    # def stop_music(self):
-    #     self.stop.set()
-        # print("RECEBIIII")
+        self.music_is_paused = False
+
+    def pause_music(self):
+        self.music_is_paused = True
+        pygame.mixer.music.pause()
+
+    def resume_music(self):
+        self.music_is_paused = False
+        pygame.mixer.music.unpause()
 
     def set_volume(self, volume):
         pygame.mixer.music.set_volume(volume)
@@ -824,15 +869,16 @@ class MusicThread(QThread):
         if self.defined_volume != -1:
             self.set_volume(self.defined_volume)
         else:
-            self.set_volume(0.04)
+            self.set_volume(0.2)
 
         # self.stop.clear()
 
         pygame.mixer.music.play()  # plays music
 
         # ---------- Waits for the music to end ----------
-        while pygame.mixer.music.get_busy():
+        while pygame.mixer.music.get_busy() and not self.music_is_paused:
             pygame.time.wait(100)
+            print(self.music_is_paused)
 
             # ---------- If user closes program or cancel ----------
             # if self.stop.is_set():
@@ -854,14 +900,14 @@ class MusicThread(QThread):
         if self.defined_volume != -1:
             self.set_volume(self.defined_volume)
         else:
-            self.set_volume(0.04)
+            self.set_volume(0.2)
 
         # self.stop.clear()
 
         pygame.mixer.music.play()  # plays music
 
         # ---------- Waits for the music to end ----------
-        while pygame.mixer.music.get_busy():
+        while pygame.mixer.music.get_busy() or self.music_is_paused:
             pygame.time.wait(100)
 
             # ---------- If user closes program or cancel ----------
@@ -1240,8 +1286,8 @@ class ApplicationHomeScreen(QMainWindow):
 
 def main():
     app = QApplication([])
-    # window = LoginWindow()
-    window = MusicsWindow()
+    window = LoginWindow()
+    # window = MusicsWindow()
     # window = ApplicationHomeScreen()
     window.show()
     app.exec()
