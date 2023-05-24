@@ -20,7 +20,7 @@ import random
 
 current_user_name = ''
 is_in_building_dataset_phase = True
-training_percentage = 0
+current_user_bpd_progress = 0
 emotionsCounter = None
 
 # datset for model training variables
@@ -244,11 +244,22 @@ class LoginWindow(QMainWindow):
     def show_next_window(self, ):
         global current_user_name
         current_user_name = self.input_name.text()
+        progress = 0
+        file_exists = os.path.isfile('users.csv')
+        if file_exists:
+            with open('users.csv', 'r') as f:
+                data = f.readlines()
+                for line in data:
+                    user_name = line.split(',')[0]
+                    if user_name.lower() == current_user_name.lower():
+                        progress = line.split(',')[1]
+                        break
         global is_in_building_dataset_phase
-        # TODO - atualizar is_in_training_phase de acordo com o user
+        if progress == 100:
+            is_in_building_dataset_phase = False
 
-        global training_percentage
-        # TODO - atualizar training_percentage de acordo com o user
+        # global current_user_bpd_progress
+        # current_user_bpd_progress = progress
 
         if is_in_building_dataset_phase:
             self.nextWindow = BuildingPhaseHomeScreen()
@@ -271,7 +282,7 @@ class MusicsWindow(QMainWindow):
         self.setMinimumSize(QSize(1200, 750))
 
         global is_in_building_dataset_phase
-        global training_percentage
+        global current_user_bpd_progress
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
@@ -382,7 +393,7 @@ class MusicsWindow(QMainWindow):
             progress_layout_vertical.setAlignment(Qt.AlignHCenter)
 
             # Slider value
-            self.slider_value_label = QLineEdit(str(training_percentage)+"%")
+            self.slider_value_label = QLineEdit(str(current_user_bpd_progress) + "%")
             self.slider_value_label.setReadOnly(True)
             slider_font = self.slider_value_label.font()
             slider_font.setPointSize(13)
@@ -394,7 +405,7 @@ class MusicsWindow(QMainWindow):
 
             self.progress_slider = QSlider(Qt.Horizontal)
             self.progress_slider.setMinimum(0)
-            self.progress_slider.setValue(training_percentage)  # TODO - colocar a percentagem de treino do user
+            self.progress_slider.setValue(current_user_bpd_progress)  # TODO - colocar a percentagem de treino do user
             self.progress_slider.setMaximum(100)
             self.progress_slider.setSingleStep(round(100/self.music_files_length))
             self.progress_slider.setMaximumSize(800, 40)
@@ -751,11 +762,11 @@ class MusicsWindow(QMainWindow):
 
             global data
 
-            first_write = not os.path.isfile('dataset_for_model_training.csv')  # checks if dataset file exists
+            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
 
             # If data has values, append to csv file to build the dataset
             if data:
-                with open('dataset_for_model_training.csv', 'a', newline='') as file:
+                with open('../dataset_for_model_training.csv', 'a', newline='') as file:
                     writer = csv.writer(file)
                     if first_write:
                         header_row = ['date', 'initial_emotion', 'music_name',
@@ -768,6 +779,40 @@ class MusicsWindow(QMainWindow):
 
                     for record in data:
                         writer.writerow(record.values())
+
+
+            #TODO - colocar isto numa função pois é chamado várias vezes
+            first_write = not os.path.isfile('../users.csv')  # checks if file exists
+            user_line_number = -1
+            progress = -1
+            global current_user_name
+            global current_user_bpd_progress
+            lines = []
+            if not first_write:
+                with open('../users.csv', 'r') as f:
+                    reader = csv.reader(f)
+                    lines = list(reader)
+                    for i, line in enumerate(lines):
+                        user_name = line[0]
+                        if user_name.lower() == current_user_name.lower():
+                            progress = line[1]
+                            user_line_number = i
+                            break
+
+            # If the current user has progress to update in the csv file
+            if progress and int(progress) != current_user_bpd_progress:
+                if user_line_number != -1:
+                    # If the user already exists, then update the progress
+                    lines[user_line_number] = [current_user_name, str(current_user_bpd_progress)]
+                else:
+                    lines.append([current_user_name, str(current_user_bpd_progress)])
+
+                with open('../users.csv', 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    if first_write:
+                        header = ['USERNAME', 'DATASET_PROGRESS']
+                        writer.writerow(header)
+                    writer.writerows(lines)
             quit()
 
     def closeEvent(self, event):
@@ -794,6 +839,38 @@ class MusicsWindow(QMainWindow):
 
                     for record in data:
                         writer.writerow(record.values())
+
+            first_write = not os.path.isfile('../users.csv')  # checks if file exists
+            user_line_number = -1
+            progress = -1
+            global current_user_name
+            global current_user_bpd_progress
+            lines = []
+            if not first_write:
+                with open('../users.csv', 'r') as f:
+                    reader = csv.reader(f)
+                    lines = list(reader)
+                    for i, line in enumerate(lines):
+                        user_name = line[0]
+                        if user_name.lower() == current_user_name.lower():
+                            progress = line[1]
+                            user_line_number = i
+                            break
+
+            # If the current user has progress to update in the csv file
+            if progress and int(progress) != current_user_bpd_progress:
+                if user_line_number != -1:
+                    # If the user already exists, then update the progress
+                    lines[user_line_number] = [current_user_name, str(current_user_bpd_progress)]
+                else:
+                    lines.append([current_user_name, str(current_user_bpd_progress)])
+
+                with open('../users.csv', 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    if first_write:
+                        header = ['USERNAME', 'DATASET_PROGRESS']
+                        writer.writerow(header)
+                    writer.writerows(lines)
             event.accept()
         else:
             event.ignore()
@@ -1043,7 +1120,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
-        global training_percentage
+        global current_user_bpd_progress
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -1098,7 +1175,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         percentage_layout.setAlignment(Qt.AlignHCenter)
         percentage_layout.setContentsMargins(0, 0, 0, 0)
 
-        percentage = QLabel(f"{training_percentage}% complete")
+        percentage = QLabel(f"{current_user_bpd_progress}% complete")
         percentage_font = percentage.font()
         percentage_font.setPointSize(22)
         percentage.setFont(percentage_font)
