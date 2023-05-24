@@ -24,9 +24,8 @@ from download_from_yt import download_musics
 from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
 
 current_user_name = ''
-is_in_building_dataset_phase = True
+is_in_building_dataset_phase = False
 current_user_bpd_progress = 0
-emotionsCounter = None
 
 # datset for model training variables
 data = []
@@ -1091,15 +1090,6 @@ class EmotionsThread(QThread):
         # Start emotion recognition
         music_time = 6
 
-        global emotionsCounter
-        emotionsCounter = {"angry": 0,
-                           "disgust": 0,
-                           "fear": 0,
-                           "happy": 0,
-                           "sad": 0,
-                           "surprise": 0,
-                           "neutral": 0}
-
         while self.emotions_running:
             result = capture_emotion(self.video)
 
@@ -1107,14 +1097,10 @@ class EmotionsThread(QThread):
             percentages = ''
             for emotion in result['emotion']:
                 percentages += str(round(result['emotion'][emotion], 3))
-                if emotion != 'neutral': # last emotion
+                if emotion != 'neutral':  # last emotion
                     percentages += '-'
 
             self.append_emotion(result['dominant_emotion'], music_time, percentages)
-
-            # ---------- Updates Counters ----------
-            if result['dominant_emotion'] != 'Not Found':
-                emotionsCounter[result['dominant_emotion']] += 1
 
             sleep(1)
             music_time += 3
@@ -1382,20 +1368,55 @@ class QuadrantWidget(QWidget):
         painter.setFont(font)
         metrics = QFontMetrics(font)
 
+        # Quadrant 1
         quadrant1_label = "Sad"
+        bored_label = "Bored"
+        tired_label = "Tired"
+        # Quadrant 2
+        sleepy_label = "Sleepy"
         quadrant2_label = "Calm"
+        pleased_label = "Pleased"
+        # Quadrant 3
+        frustrated_label = "Frustrated"
+        annoyed_label = "Annoyed"
         quadrant3_label = "Angry"
+        # Quadrant 4
+        aroused_label = "Aroused"
+        excited_label = "Excited"
         quadrant4_label = "Happy"
 
-        # Align labels on respective corners
-        quadrant1_pos = QPoint(10, height - metrics.height() - 10)
-        quadrant2_pos = QPoint(width - metrics.width(quadrant2_label) - 10, height - metrics.height() - 10)
-        quadrant3_pos = QPoint(10, 20)
-        quadrant4_pos = QPoint(width - metrics.width(quadrant4_label) - 10, 20)
+        # Quadrant 1
+        quadrant1_pos = QPoint(10, height - metrics.height() - 120)
+        bored_pos = QPoint(35, height - metrics.height() - 45)
+        tired_pos = QPoint(130, height - metrics.height())
+        # Quadrant 2
+        sleepy_pos = QPoint(width - metrics.width(quadrant2_label) - 130, height - metrics.height())
+        quadrant2_pos = QPoint(width - metrics.width(quadrant2_label) - 35, height - metrics.height() - 45)
+        pleased_pos = QPoint(width - metrics.width(quadrant2_label) - 30, height - metrics.height() - 120)
+        # Quadrant 3
+        frustrated_pos = QPoint(90, 30)
+        annoyed_pos = QPoint(30, 85)
+        quadrant3_pos = QPoint(10, 160)
+        # Quadrant 4
+        aroused_pos = QPoint(width - metrics.width(quadrant4_label) - 120, 30)
+        excited_pos = QPoint(width - metrics.width(quadrant4_label) - 35, 85)
+        quadrant4_pos = QPoint(width - metrics.width(quadrant4_label) - 10, 160)
 
+        # Quadrant 1
         painter.drawText(quadrant1_pos, quadrant1_label)
+        painter.drawText(bored_pos, bored_label)
+        painter.drawText(tired_pos, tired_label)
+        # Quadrant 2
+        painter.drawText(sleepy_pos, sleepy_label)
         painter.drawText(quadrant2_pos, quadrant2_label)
+        painter.drawText(pleased_pos, pleased_label)
+        # Quadrant 3
+        painter.drawText(frustrated_pos, frustrated_label)
+        painter.drawText(annoyed_pos, annoyed_label)
         painter.drawText(quadrant3_pos, quadrant3_label)
+        # Quadrant 4
+        painter.drawText(aroused_pos, aroused_label)
+        painter.drawText(excited_pos, excited_label)
         painter.drawText(quadrant4_pos, quadrant4_label)
 
         # Draw the image as the point
