@@ -248,6 +248,18 @@ class LoginWindow(QMainWindow):
     def show_next_window(self, ):
         global current_user_name
         current_user_name = self.input_name.text()
+        if current_user_name == "":
+            QMessageBox.warning(
+                self, "Error", "Name can't be empty",
+                QMessageBox.Ok,
+            )
+            return
+        if ',' in current_user_name:
+            QMessageBox.warning(
+                self, "Error", "Name can't contain a comma character",
+                QMessageBox.Ok,
+            )
+            return
         progress = 0
         file_exists = os.path.isfile('users.csv')
         if file_exists:
