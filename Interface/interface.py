@@ -24,7 +24,7 @@ from download_from_yt import download_musics
 from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
 
 current_user_name = ''
-is_in_building_dataset_phase = False
+is_in_building_dataset_phase = True
 current_user_bpd_progress = 0
 
 # datset for model training variables
@@ -261,14 +261,14 @@ class LoginWindow(QMainWindow):
             )
             return
         progress = 0
-        file_exists = os.path.isfile('users.csv')
+        file_exists = os.path.isfile('../users.csv')
         if file_exists:
-            with open('users.csv', 'r') as f:
+            with open('../users.csv', 'r') as f:
                 data = f.readlines()
                 for line in data:
                     user_name = line.split(',')[0]
                     if user_name.lower() == current_user_name.lower():
-                        progress = line.split(',')[1]
+                        progress = int(line.split(',')[1])
                         break
         global is_in_building_dataset_phase
         if progress == 100:
