@@ -24,15 +24,18 @@ from download_from_yt import download_musics
 from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
 
 current_user_name = ''
-is_in_building_dataset_phase = True
+is_in_building_dataset_phase = False
 current_user_bpd_progress = 0
 
-# datset for model training variables
+# dataset for model training variables
 data = []
 current_music_emotions = ''
 new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '',
               'rated_emotion': '', 'instant_seconds|percentages|dominant_emotion': ''}
 context_headers_to_dataset = ""
+
+goal_emotion = None
+
 
 def reset_values(record):
     record['initial_emotion'] = ''
@@ -286,8 +289,6 @@ class LoginWindow(QMainWindow):
             self.nextWindow.show()
             self.close()
 
-defined_volume = -1
-stop = Event()
 
 class MusicsWindow(QMainWindow):
     def __init__(self):
@@ -767,7 +768,6 @@ class MusicsWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No,
         )
         return reply
-
 
     def quit_button_clicked(self):
         reply = self.confirm_exit()
@@ -1351,9 +1351,8 @@ class QuadrantWidget(QWidget):
                 if normalized_y > 0:
                     normalized_y = round(normalized_y + 0.06, 3)
 
-            # TODO - guardar em variáveis para posteriormente usar para emoção objetivo
-            print("Y: "+str(normalized_y))
-            print("X: "+str(normalized_x))
+            global goal_emotion
+            goal_emotion = [normalized_x, normalized_y]
 
             self.update()
 
