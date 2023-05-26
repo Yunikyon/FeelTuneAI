@@ -24,7 +24,7 @@ from download_from_yt import download_musics
 from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
 
 current_user_name = ''
-is_in_building_dataset_phase = False
+is_in_building_dataset_phase = True
 current_user_bpd_progress = 0
 
 # dataset for model training variables
@@ -453,10 +453,29 @@ class MusicsWindow(QMainWindow):
         circle_layout = QHBoxLayout()
         circle_layout.setAlignment(Qt.AlignHCenter)
 
-        circle_animation = CircleAnimation()
-        circle_animation.setMaximumSize(800, 400)
-        circle_animation.setMinimumSize(800, 400)
-        circle_layout.addWidget(circle_animation)
+        # Create a label to display the GIF
+        gif_layout = QHBoxLayout()
+        gif_layout.setAlignment(Qt.AlignHCenter)
+
+        gif_label = QLabel()
+        self.audio_gif = QMovie("./images/audio-wave-animation.gif")
+        gif_label.setMovie(self.audio_gif)
+        gif_label.setMinimumSize(150, 400)
+        gif_label.setMaximumSize(150, 400)
+        gif_layout.addWidget(gif_label)
+
+        gif_widget = QWidget()
+        gif_widget.setLayout(gif_layout)
+        gif_widget.setMaximumSize(600, 400)
+        gif_widget.setMinimumSize(600, 400)
+        circle_layout.addWidget(gif_widget)
+
+        self.audio_gif.start()
+
+        # circle_animation = CircleAnimation()
+        # circle_animation.setMaximumSize(800, 400)
+        # circle_animation.setMinimumSize(800, 400)
+        # circle_layout.addWidget(circle_animation)
 
         volume_slider_layout = QHBoxLayout()
         volume_slider_layout.setAlignment(Qt.AlignRight)
@@ -509,34 +528,68 @@ class MusicsWindow(QMainWindow):
         # Buttons
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 0, 0, 0)
-        buttons_layout.setAlignment(Qt.AlignRight)
-        buttons_layout.setSpacing(25)
+        buttons_layout.setSpacing(0)
+
+        buttons_left_layout = QHBoxLayout()
+        buttons_left_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_left_layout.setSpacing(15)
+        buttons_left_layout.setAlignment(Qt.AlignLeft)
 
         # Button Quit
-        quit_button = QPushButton("Quit")
-        quit_button.setMinimumSize(120, 60)
-        quit_font = quit_button.font()
-        quit_font.setPixelSize(25)
-        quit_button.setFont(quit_font)
+        quit_button = QPushButton()
+        quit_button.setMaximumSize(60, 60)
+        quit_button.setMinimumSize(60, 60)
+        quit_button.setIcon(QIcon("./images/quit_btn.png"))
+        quit_button.setIconSize(QSize(35, 35))
         quit_button.setCursor(QCursor(Qt.PointingHandCursor))
         quit_button.setStyleSheet("* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
         quit_button.clicked.connect(self.quit_button_clicked)
-        buttons_layout.addWidget(quit_button)
+        buttons_left_layout.addWidget(quit_button)
+
+        # Button Sign Out
+        sign_out_button = QPushButton()
+        sign_out_button.setMaximumSize(60, 60)
+        sign_out_button.setMinimumSize(60, 60)
+        sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
+        sign_out_button.setIconSize(QSize(25, 25))
+        sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
+        sign_out_button.setStyleSheet(
+            "* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
+        sign_out_button.clicked.connect(self.sign_out_button_clicked)
+        buttons_left_layout.addWidget(sign_out_button)
+
+        buttons_left_widget = QWidget()
+        buttons_left_widget.setLayout(buttons_left_layout)
+        buttons_left_widget.setMaximumSize(4000, 60)
+        buttons_layout.addWidget(buttons_left_widget)
+
+
+        # buttons_layout.addWidget(quit_button)
+        buttons_right_layout = QHBoxLayout()
+        buttons_right_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_right_layout.setAlignment(Qt.AlignHCenter)
 
         # Button pause
-        self.pause_button = QPushButton("Pause")
-        self.pause_button.setMinimumSize(120, 60)
-        stop_font = self.pause_button.font()
-        stop_font.setPixelSize(25)
-        self.pause_button.setFont(stop_font)
+        self.pause_button = QPushButton()
+        self.pause_button.setMaximumSize(60, 60)
+        self.pause_button.setMinimumSize(60, 60)
+        self.pause_button.setIcon(QIcon("./images/pause_btn.png"))
+        self.pause_button.setProperty("icon_name", "pause")
+        self.pause_button.setIconSize(QSize(30, 30))
         self.pause_button.setStyleSheet("* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
         self.pause_button.setCursor(QCursor(Qt.PointingHandCursor))
         self.pause_button.clicked.connect(self.pause_button_clicked)
-        buttons_layout.addWidget(self.pause_button)
+        buttons_right_layout.addWidget(self.pause_button)
+
+        buttons_right_widget = QWidget()
+        buttons_right_widget.setLayout(buttons_right_layout)
+        buttons_layout.addWidget(buttons_right_widget)
+        buttons_right_widget.setMinimumSize(90, 60)
+        buttons_right_widget.setMaximumSize(90, 60)
 
         buttons_widget = QWidget()
         buttons_widget.setLayout(buttons_layout)
-        buttons_widget.setMaximumSize(1100, 200)
+        # buttons_widget.setMaximumSize(1100, 200)
         animation_layout.addWidget(buttons_widget)
 
         animation_widget = QWidget()
@@ -753,14 +806,22 @@ class MusicsWindow(QMainWindow):
         self.music_thread.set_volume(value/100)
 
     def pause_button_clicked(self):
-        if self.pause_button.text() == "Pause":
+        if self.pause_button.property("icon_name") == "pause":
             self.music_thread.pause_music()
             self.music_is_paused = True
-            self.pause_button.setText("Resume")
+            # TODO - pause emotions
+            self.pause_button.setIcon(QIcon("./images/play_btn.png"))
+            self.pause_button.setProperty("icon_name", "play")
+            self.pause_button.setIconSize(QSize(30, 30))
+            self.audio_gif.stop()
         else:
             self.music_thread.resume_music()
             self.music_is_paused = False
-            self.pause_button.setText("Pause")
+            # TODO - pause emotions
+            self.pause_button.setIcon(QIcon("./images/pause_btn.png"))
+            self.pause_button.setProperty("icon_name", "pause")
+            self.pause_button.setIconSize(QSize(30, 30))
+            self.audio_gif.start()
 
     def confirm_exit(self):
         reply = QMessageBox.warning(
@@ -830,6 +891,9 @@ class MusicsWindow(QMainWindow):
                         writer.writerow(header)
                     writer.writerows(lines)
             quit()
+
+    def sign_out_button_clicked(self):
+        print("TODO")  # TODO
 
     def closeEvent(self, event):
         response = self.confirm_exit()
@@ -1059,7 +1123,7 @@ class MusicThread(QThread):
         #     pygame.time.wait(100)
 
         pygame.time.wait(30000)
-        print("here")
+
         # ---------- Finished Music ----------
         self.finished_music_signal.emit()
         self.pause_music()
@@ -1075,7 +1139,6 @@ class EmotionsThread(QThread):
 
         self.emotions_running = False
         self.video = cv2.VideoCapture(0)
-
 
     def stop_emotions(self):
         global current_music_emotions
@@ -1576,8 +1639,8 @@ def main():
     # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
     app = QApplication([])
     window = LoginWindow()
-    # # window = MusicsWindow()
-    # # window = ApplicationHomeScreen()
+    # window = MusicsWindow()
+    # window = ApplicationHomeScreen()
     window.show()
     app.exec()
 
