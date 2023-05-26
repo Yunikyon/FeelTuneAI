@@ -26,6 +26,10 @@ from predict_musics_VA import predict_music_directory_emotions, predict_uploaded
 current_user_name = ''
 is_in_building_dataset_phase = True
 current_user_bpd_progress = 0
+music_files_bdp_length = 0
+musics_listened_by_current_user = []
+last_context_data = ""
+last_time_context_data_was_called = ""
 
 # datset for model training variables
 data = []
@@ -262,17 +266,22 @@ class LoginWindow(QMainWindow):
             return
         progress = 0
         file_exists = os.path.isfile('../users.csv')
+        global musics_listened_by_current_user
+        aux_musics_listened_previously = ''
         if file_exists:
-            with open('../users.csv', 'r') as f:
-                data = f.readlines()
-                for line in data:
-                    user_name = line.split(',')[0]
-                    if user_name.lower() == current_user_name.lower():
-                        progress = int(line.split(',')[1])
+            with open('../users.csv', 'r') as file:
+                for line in file:
+                    line_content = line.split('~~~')
+                    user_name = line_content[0]
+                    if user_name == current_user_name.lower():
+                        progress = int(line_content[1])
+                        aux_musics_listened_previously = line_content[2]
                         break
         global is_in_building_dataset_phase
         if progress == 100:
             is_in_building_dataset_phase = False
+        if aux_musics_listened_previously != '':
+            musics_listened_by_current_user = aux_musics_listened_previously.split('___')
 
         global current_user_bpd_progress
         current_user_bpd_progress = progress
@@ -314,7 +323,8 @@ class MusicsWindow(QMainWindow):
         music_name = ''
         if is_in_building_dataset_phase:
             musics_directory = '../BuildingDatasetPhaseMusics'
-            music_name = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
+            # music_name = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
+            music_name = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
         else:
             musics_directory = '../ApplicationMusics'
             music_name = 'Sad music 1 minute.mp3'
@@ -391,6 +401,8 @@ class MusicsWindow(QMainWindow):
         if is_in_building_dataset_phase:
             self.music_files = os.listdir('../BuildingDatasetPhaseMusics')
             self.music_files_length = len(self.music_files)
+            global music_files_bdp_length
+            music_files_bdp_length = self.music_files_length
 
             if self.music_files_length == 0:
                 print(f"{Bcolors.WARNING} BDP music files length is zero" + Bcolors.ENDC)
@@ -768,6 +780,50 @@ class MusicsWindow(QMainWindow):
         )
         return reply
 
+    def save_progress_to_csv(self):
+        global current_user_name
+        global current_user_bpd_progress
+        global musics_listened_by_current_user
+        first_write = not os.path.isfile('../users.csv')  # checks if file exists
+        user_line_number = -1
+        progress = -1
+        musics_listened_last_session = '' # List of musics that the user listened before the current session
+        lines = []
+        if not first_write:
+            with open('../users.csv', 'r', encoding='utf-8') as file:
+                for i, line in enumerate(file):
+                    if i == 0:
+                        continue # Ignore header line in the file
+                    line = line[:-1] # Remove the '\n' character
+                    line_content = line.split('~~~')
+                    lines.append(line_content)
+                    user_name = line_content[0]
+                    if user_name == current_user_name.lower():
+                        progress = line_content[1]
+                        musics_listened_last_session = line_content[2]
+                        user_line_number = i
+
+        # If the current user has progress to update in the csv file
+        delimiter = '~~~'
+
+        for music in musics_listened_by_current_user:
+            musics_listened_last_session += music + '___'
+        musics_listened_last_session = musics_listened_last_session[:-3] # Remove the last '___'
+
+        if progress and int(progress) != current_user_bpd_progress:
+            if user_line_number != -1:
+                # If the user already exists, then update the progress
+                lines[user_line_number] = [current_user_name.lower(), str(current_user_bpd_progress), musics_listened_last_session]
+            else:
+                lines.append([current_user_name.lower(), str(current_user_bpd_progress), musics_listened_last_session])
+
+            with open('../users.csv', 'w', newline='', encoding='utf-8') as f:
+                header = ['USERNAME', 'DATASET_PROGRESS', 'MUSICS_LISTENED']
+                h = delimiter.join(header)
+                f.write(h + '\n')
+                for line in lines:
+                    l = delimiter.join(line)
+                    f.write(l + '\n')
 
     def quit_button_clicked(self):
         reply = self.confirm_exit()
@@ -796,39 +852,7 @@ class MusicsWindow(QMainWindow):
                     for record in data:
                         writer.writerow(record.values())
 
-
-            #TODO - colocar isto numa função pois é chamado várias vezes
-            first_write = not os.path.isfile('../users.csv')  # checks if file exists
-            user_line_number = -1
-            progress = -1
-            global current_user_name
-            global current_user_bpd_progress
-            lines = []
-            if not first_write:
-                with open('../users.csv', 'r') as f:
-                    reader = csv.reader(f)
-                    lines = list(reader)
-                    for i, line in enumerate(lines):
-                        user_name = line[0]
-                        if user_name.lower() == current_user_name.lower():
-                            progress = line[1]
-                            user_line_number = i
-                            break
-
-            # If the current user has progress to update in the csv file
-            if progress and int(progress) != current_user_bpd_progress:
-                if user_line_number != -1:
-                    # If the user already exists, then update the progress
-                    lines[user_line_number] = [current_user_name, str(current_user_bpd_progress)]
-                else:
-                    lines.append([current_user_name, str(current_user_bpd_progress)])
-
-                with open('../users.csv', 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    if first_write:
-                        header = ['USERNAME', 'DATASET_PROGRESS']
-                        writer.writerow(header)
-                    writer.writerows(lines)
+            self.save_progress_to_csv()
             quit()
 
     def closeEvent(self, event):
@@ -856,37 +880,7 @@ class MusicsWindow(QMainWindow):
                     for record in data:
                         writer.writerow(record.values())
 
-            first_write = not os.path.isfile('../users.csv')  # checks if file exists
-            user_line_number = -1
-            progress = -1
-            global current_user_name
-            global current_user_bpd_progress
-            lines = []
-            if not first_write:
-                with open('../users.csv', 'r') as f:
-                    reader = csv.reader(f)
-                    lines = list(reader)
-                    for i, line in enumerate(lines):
-                        user_name = line[0]
-                        if user_name.lower() == current_user_name.lower():
-                            progress = line[1]
-                            user_line_number = i
-                            break
-
-            # If the current user has progress to update in the csv file
-            if progress and int(progress) != current_user_bpd_progress:
-                if user_line_number != -1:
-                    # If the user already exists, then update the progress
-                    lines[user_line_number] = [current_user_name, str(current_user_bpd_progress)]
-                else:
-                    lines.append([current_user_name, str(current_user_bpd_progress)])
-
-                with open('../users.csv', 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    if first_write:
-                        header = ['USERNAME', 'DATASET_PROGRESS']
-                        writer.writerow(header)
-                    writer.writerows(lines)
+            self.save_progress_to_csv()
             event.accept()
         else:
             event.ignore()
@@ -939,12 +933,15 @@ class MusicsWindow(QMainWindow):
     def emotion_rated(self, emotion):
         global data
         global new_record
+        global musics_listened_by_current_user
+        global current_user_bpd_progress
 
         self.setDisabled(True)
         self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
         self.is_rating_music = False
         self.switch_layout()
-
+        musics_listened_by_current_user.append(new_record['music_name'])
+        current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
         current_time = datetime.now().strftime("%d/%m/%YT%H:%M:%S")  # gets record data
 
         new_dict = {'date': current_time, 'initial_emotion': new_record['initial_emotion'],
@@ -954,8 +951,18 @@ class MusicsWindow(QMainWindow):
                     'instant_seconds|percentages|dominant_emotion': new_record['instant_seconds|percentages|dominant_emotion']
                     }
 
+        # Get current time
+        update_time = datetime.now()
+        global last_time_context_data_was_called
+        global last_context_data
+        # Update context if there is no context or if 20 minutes have elapsed since last time
+        if last_time_context_data_was_called == "" or ((update_time - last_time_context_data_was_called).total_seconds() > 1200):
+            last_time_context_data_was_called = update_time
+            context_dictionary = self.get_context()
+            last_context_data = context_dictionary
+        else :
+            context_dictionary = last_context_data
 
-        context_dictionary = self.get_context()
         new_dict.update(context_dictionary)
         data.append(new_dict)
         new_record = reset_values(new_record)
@@ -987,8 +994,11 @@ class MusicsWindow(QMainWindow):
     def play_next_music_clicked(self):
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
         global new_record
+        # global is_in_building_dataset_phase
+        # if is_in_building_dataset_phase:
 
-        new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
+        # new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
+        new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
         self.music_thread.start()
         self.music_playing = True
         self.switch_layout()
@@ -1250,8 +1260,12 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
     def continue_button_clicked(self):
         global new_record
-
-        new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
+        # global is_in_building_dataset_phase
+        #
+        # if is_in_building_dataset_phase:
+        #     new_music =
+        # new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
+        new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
 
         self.nextWindow = MusicsWindow()
         self.nextWindow.show()
