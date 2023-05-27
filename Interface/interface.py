@@ -307,6 +307,8 @@ class MusicsWindow(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
+        self.nextWindow = None
+
         global is_in_building_dataset_phase
         global current_user_bpd_progress
 
@@ -376,6 +378,7 @@ class MusicsWindow(QMainWindow):
             lines.setMinimumSize(40, 80)
             corner_layout.addWidget(lines)
 
+            # BDP Label
             training_label = QLabel('Building Dataset\n \t Phase')
             training_font = training_label.font()
             training_font.setPixelSize(25)
@@ -841,9 +844,9 @@ class MusicsWindow(QMainWindow):
             self.pause_button.setIconSize(QSize(30, 30))
             self.audio_gif.start()
 
-    def confirm_exit(self):
+    def confirm_warning(self, title, message):
         reply = QMessageBox.warning(
-            self, "Confirm Exit", "You're about to leave the application.\n Are you sure?",
+            self, title, message,
             QMessageBox.Yes | QMessageBox.No,
         )
         return reply
@@ -892,69 +895,65 @@ class MusicsWindow(QMainWindow):
                 for line in lines:
                     l = delimiter.join(line)
                     f.write(l + '\n')
+    def stop_threads_and_save_progress(self):
+        self.music_thread.pause_music()
+        self.music_thread.exit(0)
+        self.emotion_thread.pause_emotions()
+        self.emotion_thread.exit(0)  # TODO - Not sure se é preciso colocar o stop emotions (?)
+
+        global data
+
+        first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
+
+        # If data has values, append to csv file to build the dataset
+        if data:
+            with open('../dataset_for_model_training.csv', 'a', newline='') as file:
+                writer = csv.writer(file)
+                if first_write:
+                    header_row = ['date', 'initial_emotion', 'music_name',
+                                  'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
+
+                    for attribute in context_headers_to_dataset:
+                        header_row.append(attribute.rstrip('\r'))
+
+                    writer.writerow(header_row)
+
+                for record in data:
+                    writer.writerow(record.values())
+
+        self.save_progress_to_csv()
 
     def quit_button_clicked(self):
-        reply = self.confirm_exit()
+        reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
-            self.music_thread.pause_music()
-            self.music_thread.exit(0)
-
-            global data
-
-            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
-
-            # If data has values, append to csv file to build the dataset
-            if data:
-                with open('../dataset_for_model_training.csv', 'a', newline='') as file:
-                    writer = csv.writer(file)
-                    if first_write:
-                        header_row = ['date', 'initial_emotion', 'music_name',
-                                      'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
-
-                        for attribute in context_headers_to_dataset:
-                            header_row.append(attribute.rstrip('\r'))
-
-                        writer.writerow(header_row)
-
-                    for record in data:
-                        writer.writerow(record.values())
-
-            self.save_progress_to_csv()
-            quit()
+            self.stop_threads_and_save_progress()
+            quit(0)
 
     def sign_out_button_clicked(self):
-        print("TODO")  # TODO
+        reply = self.confirm_warning("Confirm Sign Out", "You're about to sign out.\n Are you sure?")
+
+        if reply == QMessageBox.Yes:
+            self.stop_threads_and_save_progress()
+
+            global current_user_name
+            current_user_name = ''
+            global current_user_bpd_progress
+            current_user_bpd_progress = 0
+
+            # Switches to Login Window
+            self.nextWindow = LoginWindow()
+            self.nextWindow.show()
+            self.close()
 
     def closeEvent(self, event):
-        response = self.confirm_exit()
-        if response == QMessageBox.Yes:
-            self.music_thread.pause_music()
-            self.music_thread.exit(0)
-
-            global data
-
-            first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
-            # if data has values, append to csv file to build the dataset
-            if data:
-                with open('../dataset_for_model_training.csv', 'a', newline='', encoding="utf-8") as file:
-                    writer = csv.writer(file)
-                    if first_write:
-                        header_row = ['date', 'initial_emotion', 'music_name',
-                                      'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
-
-                        for attribute in context_headers_to_dataset:
-                            header_row.append(attribute.rstrip('\r'))
-
-                        writer.writerow(header_row)
-
-                    for record in data:
-                        writer.writerow(record.values())
-
-            self.save_progress_to_csv()
-            event.accept()
-        else:
-            event.ignore()
+        if not ("LoginWindow" in str(self.nextWindow)):
+            reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+            if reply == QMessageBox.Yes:
+                self.stop_threads_and_save_progress()
+                quit(0)
+            else:
+                event.ignore()
 
     class PaintLine(QWidget):
         def paintEvent(self, event):
@@ -1250,7 +1249,23 @@ class BuildingPhaseHomeScreen(QMainWindow):
         blank_space_one.setMaximumSize(10, 30)
         base_layout.addWidget(blank_space_one)
 
-        # Training title
+        # Welcome message
+        welcome_layout = QHBoxLayout()
+        welcome_layout.setContentsMargins(0, 0, 0, 0)
+        welcome_layout.setAlignment(Qt.AlignHCenter)
+
+        welcome_label = QLabel(f"Glad you tuned in, {current_user_name}!")
+        welcome_font = welcome_label.font()
+        welcome_font.setPointSize(20)
+        welcome_label.setFont(welcome_font)
+        welcome_layout.addWidget(welcome_label)
+
+        welcome_widget = QWidget()
+        welcome_widget.setLayout(welcome_layout)
+        welcome_widget.setMaximumSize(2000, 60)
+        base_layout.addWidget(welcome_widget)
+
+        # BDP title
         title_layout = QHBoxLayout()
         title_layout.setAlignment(Qt.AlignHCenter)
         title_layout.setContentsMargins(0, 0, 0, 0)
