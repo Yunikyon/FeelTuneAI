@@ -548,9 +548,12 @@ class MusicsWindow(QMainWindow):
         buttons_left_layout.setAlignment(Qt.AlignLeft)
 
         # Button Quit
-        quit_button = QPushButton()
-        quit_button.setMaximumSize(60, 60)
-        quit_button.setMinimumSize(60, 60)
+        quit_button = QPushButton("Quit")
+        quit_button_font = quit_button.font()
+        quit_button_font.setPointSize(10)
+        quit_button.setFont(quit_button_font)
+        quit_button.setMaximumSize(135, 60)
+        quit_button.setMinimumSize(135, 60)
         quit_button.setIcon(QIcon("./images/quit_btn.png"))
         quit_button.setIconSize(QSize(35, 35))
         quit_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -559,9 +562,12 @@ class MusicsWindow(QMainWindow):
         buttons_left_layout.addWidget(quit_button)
 
         # Button Sign Out
-        sign_out_button = QPushButton()
-        sign_out_button.setMaximumSize(60, 60)
-        sign_out_button.setMinimumSize(60, 60)
+        sign_out_button = QPushButton(" Sign Out")
+        sign_out_button_font = sign_out_button.font()
+        sign_out_button_font.setPointSize(10)
+        sign_out_button.setFont(sign_out_button_font)
+        sign_out_button.setMaximumSize(145, 60)
+        sign_out_button.setMinimumSize(145, 60)
         sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
         sign_out_button.setIconSize(QSize(25, 25))
         sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -820,16 +826,16 @@ class MusicsWindow(QMainWindow):
     def pause_button_clicked(self):
         if self.pause_button.property("icon_name") == "pause":
             self.music_thread.pause_music()
+            self.emotion_thread.pause_emotions()
             self.music_is_paused = True
-            # TODO - pause emotions
             self.pause_button.setIcon(QIcon("./images/play_btn.png"))
             self.pause_button.setProperty("icon_name", "play")
             self.pause_button.setIconSize(QSize(30, 30))
             self.audio_gif.stop()
         else:
             self.music_thread.resume_music()
+            self.emotion_thread.resume_emotions()
             self.music_is_paused = False
-            # TODO - pause emotions
             self.pause_button.setIcon(QIcon("./images/pause_btn.png"))
             self.pause_button.setProperty("icon_name", "pause")
             self.pause_button.setIconSize(QSize(30, 30))
@@ -1149,7 +1155,14 @@ class EmotionsThread(QThread):
         super().__init__(parent)
 
         self.emotions_running = False
+        self.emotions_paused = False
         self.video = cv2.VideoCapture(0)
+
+    def pause_emotions(self):
+        self.emotions_paused = True
+
+    def resume_emotions(self):
+        self.emotions_paused = False
 
     def stop_emotions(self):
         global current_music_emotions
@@ -1177,19 +1190,20 @@ class EmotionsThread(QThread):
         music_time = 6
 
         while self.emotions_running:
-            result = capture_emotion(self.video)
+            if not self.emotions_paused:
+                result = capture_emotion(self.video)
 
-            # ---------- Round emotions values ----------
-            percentages = ''
-            for emotion in result['emotion']:
-                percentages += str(round(result['emotion'][emotion], 3))
-                if emotion != 'neutral':  # last emotion
-                    percentages += '-'
+                # ---------- Round emotions values ----------
+                percentages = ''
+                for emotion in result['emotion']:
+                    percentages += str(round(result['emotion'][emotion], 3))
+                    if emotion != 'neutral':  # last emotion
+                        percentages += '-'
 
-            self.append_emotion(result['dominant_emotion'], music_time, percentages)
+                self.append_emotion(result['dominant_emotion'], music_time, percentages)
 
-            sleep(1)
-            music_time += 3
+                sleep(1)
+                music_time += 3
 
         pass
 
@@ -1649,7 +1663,6 @@ class ApplicationHomeScreen(QMainWindow):
 
 
 def main():
-    # app = QApplication([])
     # download_musics(['https://www.youtube.com/watch?v=znWi3zN8Ucg', 'https://www.youtube.com/watch?v=tEwvUu1dBTs'], '../BuildingDatasetPhaseMusics')
     # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
     app = QApplication([])
