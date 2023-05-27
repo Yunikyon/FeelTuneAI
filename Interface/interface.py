@@ -774,7 +774,7 @@ class MusicsWindow(QMainWindow):
         play_next_layout = QVBoxLayout()
         play_next_layout.setAlignment(Qt.AlignHCenter)
 
-        # Blank space five
+        # Blank space
         blank_space = QLabel()
         blank_space.setMaximumSize(10, 120)
         play_next_layout.addWidget(blank_space)
@@ -806,6 +806,81 @@ class MusicsWindow(QMainWindow):
         play_next_widget = QWidget()
         play_next_widget.setLayout(play_next_layout)
         self.stacked_widget.addWidget(play_next_widget)
+        # --- End of Play Next Music widget
+
+        # --- Finished BDP widget
+        finished_bdp_layout = QVBoxLayout()
+        finished_bdp_layout.setAlignment(Qt.AlignHCenter)
+
+        # Blank space
+        blank_space = QLabel()
+        blank_space.setMaximumSize(10, 60)
+        finished_bdp_layout.addWidget(blank_space)
+
+        # Congrats label
+        congrats_layout = QHBoxLayout()
+        congrats_layout.setAlignment(Qt.AlignHCenter)
+        congrats_layout.setContentsMargins(0, 0, 0, 0)
+
+        congrats_label = QLabel(f"Congrats, {current_user_name}!")
+        congrats_font = congrats_label.font()
+        congrats_font.setPointSize(20)
+        congrats_label.setFont(congrats_font)
+        congrats_label.setMaximumSize(240, 70)
+        congrats_label.setMinimumSize(240, 70)
+        congrats_layout.addWidget(congrats_label)
+
+        congrats_widget = QWidget()
+        congrats_widget.setLayout(congrats_layout)
+        congrats_widget.setMaximumSize(2000, 70)
+        finished_bdp_layout.addWidget(congrats_widget)
+
+        # Finished label
+        finished_layout = QHBoxLayout()
+        finished_layout.setAlignment(Qt.AlignHCenter)
+        finished_layout.setContentsMargins(0, 0, 0, 0)
+
+        finished_label = QLabel("Finished Building Dataset Phase")
+        finished_font = finished_label.font()
+        finished_font.setPointSize(25)
+        finished_label.setFont(finished_font)
+        finished_label.setMaximumSize(600, 80)
+        finished_label.setMinimumSize(600, 80)
+        finished_layout.addWidget(finished_label)
+
+        finished_widget = QWidget()
+        finished_widget.setLayout(finished_layout)
+        finished_widget.setMaximumSize(2000, 80)
+        finished_bdp_layout.addWidget(finished_widget)
+
+        # Continue button
+        continue_layout = QHBoxLayout()
+        continue_layout.setAlignment(Qt.AlignHCenter)
+
+        continue_btn = QPushButton("Continue")
+        continue_font = continue_btn.font()
+        continue_font.setPointSize(18)
+        continue_btn.setFont(continue_font)
+        continue_btn.setStyleSheet(
+            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+        continue_btn.clicked.connect(self.finished_btn_clicked)
+        continue_btn.setMaximumSize(180, 80)
+        continue_btn.setMinimumSize(180, 80)
+        continue_layout.addWidget(continue_btn)
+
+        continue_widget = QWidget()
+        continue_widget.setLayout(continue_layout)
+        continue_widget.setMaximumSize(2000, 100)
+        finished_bdp_layout.addWidget(continue_widget)
+
+        # Blank space five
+        blank_space_five = QLabel()
+        blank_space_five.setMaximumSize(10, 800)
+        finished_bdp_layout.addWidget(blank_space_five)
+
+        finished_bdp_widget = QWidget()
+        finished_bdp_widget.setLayout(finished_bdp_layout)
+        self.stacked_widget.addWidget(finished_bdp_widget)
         # --- End of Play Next Music widget
 
         base_layout.addWidget(self.stacked_widget)
@@ -899,7 +974,7 @@ class MusicsWindow(QMainWindow):
         self.music_thread.pause_music()
         self.music_thread.exit(0)
         self.emotion_thread.pause_emotions()
-        self.emotion_thread.exit(0)  # TODO - Not sure se é preciso colocar o stop emotions (?)
+        self.emotion_thread.exit(0)
 
         global data
 
@@ -947,7 +1022,7 @@ class MusicsWindow(QMainWindow):
             self.close()
 
     def closeEvent(self, event):
-        if not ("LoginWindow" in str(self.nextWindow)):
+        if not ("LoginWindow" in str(self.nextWindow)) and not ("ApplicationHomeScreen" in str(self.nextWindow)):
             reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
             if reply == QMessageBox.Yes:
                 self.stop_threads_and_save_progress()
@@ -980,7 +1055,12 @@ class MusicsWindow(QMainWindow):
             if self.is_rating_music:
                 self.stacked_widget.setCurrentIndex(1)
             else:
-                self.stacked_widget.setCurrentIndex(2)
+                global current_user_bpd_progress
+                if current_user_bpd_progress != 100:
+                    # Play next music button
+                    self.stacked_widget.setCurrentIndex(2)
+                else: # Finished BDP Phase
+                    self.stacked_widget.setCurrentIndex(3)
 
     def get_context(self):
         dataframe = contextMain.execute()
@@ -1009,9 +1089,9 @@ class MusicsWindow(QMainWindow):
         self.setDisabled(True)
         self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
         self.is_rating_music = False
-        self.switch_layout()
         musics_listened_by_current_user.append(new_record['music_name'])
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
+        self.switch_layout()
         current_time = datetime.now().strftime("%d/%m/%YT%H:%M:%S")  # gets record data
 
         new_dict = {'date': current_time, 'initial_emotion': new_record['initial_emotion'],
@@ -1091,6 +1171,11 @@ class MusicsWindow(QMainWindow):
 
     def new_emotion(self, result):
         print(result)
+
+    def finished_btn_clicked(self):
+        self.nextWindow = ApplicationHomeScreen()
+        self.nextWindow.show()
+        self.close()
 
 
 class MusicThread(QThread):
