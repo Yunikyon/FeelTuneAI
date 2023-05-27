@@ -255,6 +255,7 @@ class LoginWindow(QMainWindow):
     def show_next_window(self, ):
         global current_user_name
         current_user_name = self.input_name.text()
+
         if current_user_name == "":
             QMessageBox.warning(
                 self, "Error", "Name can't be empty",
@@ -267,10 +268,16 @@ class LoginWindow(QMainWindow):
                 QMessageBox.Ok,
             )
             return
-        progress = 0
-        file_exists = os.path.isfile('../users.csv')
+
         global musics_listened_by_current_user
+        global is_in_building_dataset_phase
+        global current_user_bpd_progress
+
+        progress = 0
         aux_musics_listened_previously = ''
+        file_exists = os.path.isfile('../users.csv')
+
+        # Read user's save information
         if file_exists:
             with open('../users.csv', 'r') as file:
                 for line in file:
@@ -280,13 +287,13 @@ class LoginWindow(QMainWindow):
                         progress = int(line_content[1])
                         aux_musics_listened_previously = line_content[2]
                         break
-        global is_in_building_dataset_phase
+
         if progress == 100:
             is_in_building_dataset_phase = False
+
         if aux_musics_listened_previously != '':
             musics_listened_by_current_user = aux_musics_listened_previously.split('___')
 
-        global current_user_bpd_progress
         current_user_bpd_progress = progress
 
         if is_in_building_dataset_phase:
@@ -970,12 +977,14 @@ class MusicsWindow(QMainWindow):
                 for line in lines:
                     l = delimiter.join(line)
                     f.write(l + '\n')
-    def stop_threads_and_save_progress(self):
+
+    def stop_threads(self):
         self.music_thread.pause_music()
         self.music_thread.exit(0)
         self.emotion_thread.pause_emotions()
         self.emotion_thread.exit(0)
 
+    def save_user_progress(self):
         global data
 
         first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
@@ -1002,14 +1011,23 @@ class MusicsWindow(QMainWindow):
         reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
-            self.stop_threads_and_save_progress()
+            self.stop_threads()
+
+            global is_in_building_dataset_phase
+            if is_in_building_dataset_phase:
+                self.save_user_progress()
+
             quit(0)
 
     def sign_out_button_clicked(self):
         reply = self.confirm_warning("Confirm Sign Out", "You're about to sign out.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
-            self.stop_threads_and_save_progress()
+            self.stop_threads()
+
+            global is_in_building_dataset_phase
+            if is_in_building_dataset_phase:
+                self.save_user_progress()
 
             global current_user_name
             current_user_name = ''
@@ -1025,7 +1043,12 @@ class MusicsWindow(QMainWindow):
         if not ("LoginWindow" in str(self.nextWindow)) and not ("ApplicationHomeScreen" in str(self.nextWindow)):
             reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
             if reply == QMessageBox.Yes:
-                self.stop_threads_and_save_progress()
+                self.stop_threads()
+
+                global is_in_building_dataset_phase
+                if is_in_building_dataset_phase:
+                    self.save_user_progress()
+
                 quit(0)
             else:
                 event.ignore()
@@ -1118,7 +1141,6 @@ class MusicsWindow(QMainWindow):
         new_record = reset_values(new_record)
 
         self.setDisabled(False)
-        # TODO - quando percentagem chegar a 100% = treino concluído, colocar novo layout
 
     def angry_button_clicked(self):
         self.emotion_rated("angry")
@@ -1173,6 +1195,9 @@ class MusicsWindow(QMainWindow):
         print(result)
 
     def finished_btn_clicked(self):
+        global is_in_building_dataset_phase
+        is_in_building_dataset_phase = False
+        self.save_progress_to_csv()
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
         self.close()
