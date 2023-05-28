@@ -2,6 +2,8 @@ import numpy as np
 
 
 def get_weather_type(data, id):
+    if data is None:
+        return "N/A"
     for item in data['data']:
         if item['idWeatherType'] == id:
             return item['descWeatherTypeEN']
@@ -9,6 +11,8 @@ def get_weather_type(data, id):
 
 
 def get_precipitation_type(data, id):
+    if data is None:
+        return "N/A"
     if np.isnan(id):
         return "No precipitation"
     for item in data['data']:
@@ -18,6 +22,8 @@ def get_precipitation_type(data, id):
 
 
 def get_wind_speed_type(data, id):
+    if data is None:
+        return "N/A"
     for item in data['data']:
         if int(item['classWindSpeed']) == id:
             return item['descClassWindSpeedDailyEN']
@@ -25,6 +31,8 @@ def get_wind_speed_type(data, id):
 
 
 def transform_hours_into_day_classification(date):
+    if date is None:
+        return "N/A"
     hours = date.split("T")[1]
     if "00:00:00" <= hours < "05:00:00":
         return 'Night'

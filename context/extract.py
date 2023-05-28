@@ -16,7 +16,7 @@ import json
 
 def get_ipma_data():
     response = getJsonResponseFromUrl("http://api.ipma.pt/open-data/forecast/meteorology/cities/daily/hp-daily-forecast-day0.json")
-    if not response.ok:
+    if response is None:
         return None
     response = response.json()
     date = response['forecastDate']
@@ -43,7 +43,15 @@ def getJsonResponseFromUrl(url, header_args=""):
             # When I only pass 1 header
             key, value = header_args.split(':')
             headers[key] = value
-    return requests.get(url, headers=headers)
+    try:
+        request = requests.get(url, headers=headers, timeout=5)
+        if not request.ok:
+            print("ERROR: ", request.text)
+            return None
+        return request
+    except ConnectionError as e:
+        print("ERROR: ", e)
+        return None
 
 
 def getResponseFromUrl(url):

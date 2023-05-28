@@ -33,8 +33,7 @@ def execute():
     values = []
     for index, row in df_mylocation.iterrows():
         response = extract.getJsonResponseFromUrl(f"https://api.sunrise-sunset.org/json?lat={row['latitude']}&lng={row['longitude']}&date={row['forecastDate']}")
-        if not response.ok:
-            print("ERROR:" + response.text)
+        if response is None:
             continue
         response = response.json()
         new_record = {'globalIdLocal': row['globalIdLocal'], 'currentTime': datetime.now().strftime("%Y-%m-%dT%H:%M:%S")}
@@ -53,8 +52,7 @@ def execute():
         responseWeatherApi = extract.getJsonResponseFromUrl(
             f"https://api.api-ninjas.com/v1/weather?lat={row['latitude']}&lon={row['longitude']}",
             "X-Api-Key:gsNY5AepnuvZYcIOG0q4rg==W9sSXxN89hDQSAi0")
-        if not responseWeatherApi.ok:
-            print("ERROR:" + responseWeatherApi.text)
+        if responseWeatherApi is None:
             continue
         responseWeatherApi = responseWeatherApi.json()
 
@@ -71,21 +69,18 @@ def execute():
     # -------------------------- TRANSFORM PROCESS --------------------------
     def get_code_to_value_transformation():
         info_weather_type = extract.getJsonResponseFromUrl("https://api.ipma.pt/open-data/weather-type-classe.json")
-        if not info_weather_type.ok:
-            print("ERROR:" + info_weather_type.text)
-        info_weather_type = info_weather_type.json()
+        if info_weather_type is not None:
+            info_weather_type = info_weather_type.json()
 
         info_precipitation_type = extract.getJsonResponseFromUrl(
             "https://api.ipma.pt/open-data/precipitation-classe.json")
-        if not info_precipitation_type.ok:
-            print("ERROR:" + info_precipitation_type.text)
-        info_precipitation_type = info_precipitation_type.json()
+        if info_precipitation_type is not None:
+            info_precipitation_type = info_precipitation_type.json()
 
         info_wind_class_type = extract.getJsonResponseFromUrl(
             "https://api.ipma.pt/open-data/wind-speed-daily-classe.json")
-        if not info_wind_class_type.ok:
-            print("ERROR:" + info_wind_class_type.text)
-        info_wind_class_type = info_wind_class_type.json()
+        if info_wind_class_type is not None:
+            info_wind_class_type = info_wind_class_type.json()
 
         return info_weather_type, info_precipitation_type, info_wind_class_type
 
@@ -93,17 +88,17 @@ def execute():
 
     for index, row in df3.iterrows():
         # --- classPrecInt attribute transformation ---
-        if info_weather_type is not None and 'classPrecInt' in df3.columns:
+        if  'classPrecInt' in df3.columns:
             precipitation_id = df3.at[index, 'classPrecInt']
             df3.at[index, 'classPrecInt'] = transform.get_precipitation_type(info_precipitation_type, precipitation_id)
 
         # --- classWindSpeed attribute transformation ---
-        if info_wind_class_type is not None and 'classWindSpeed' in df3.columns:
+        if 'classWindSpeed' in df3.columns:
             wind_speed_id = df3.at[index, 'classWindSpeed']
             df3.at[index, 'classWindSpeed'] = transform.get_wind_speed_type(info_wind_class_type, wind_speed_id)
 
         # --- idWeatherType attribute transformation ---
-        if info_weather_type is not None and 'idWeatherType' in df3.columns:
+        if 'idWeatherType' in df3.columns:
             weather_id = df3.at[index, 'idWeatherType']
             df3.at[index, 'idWeatherType'] = transform.get_weather_type(info_weather_type, weather_id)
 

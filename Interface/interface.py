@@ -27,7 +27,8 @@ current_user_name = ''
 is_in_building_dataset_phase = True
 current_user_bpd_progress = 0
 music_files_bdp_length = 0
-musics_listened_by_current_user = []
+musics_listened_by_current_user = [] # To choose what music to play next
+musics_listened_by_current_user_in_current_session = []
 last_context_data = ""
 last_time_context_data_was_called = ""
 
@@ -279,8 +280,10 @@ class LoginWindow(QMainWindow):
 
         # Read user's save information
         if file_exists:
-            with open('../users.csv', 'r') as file:
-                for line in file:
+            with open('../users.csv', 'r', encoding='utf-8') as file:
+                for i, line in enumerate(file):
+                    if i == 0:
+                        continue
                     line_content = line.split('~~~')
                     user_name = line_content[0]
                     if user_name == current_user_name.lower():
@@ -292,7 +295,7 @@ class LoginWindow(QMainWindow):
             is_in_building_dataset_phase = False
 
         if aux_musics_listened_previously != '':
-            musics_listened_by_current_user = aux_musics_listened_previously.split('___')
+            musics_listened_by_current_user = aux_musics_listened_previously.replace('\n', '').split('___')
 
         current_user_bpd_progress = progress
 
@@ -337,6 +340,8 @@ class MusicsWindow(QMainWindow):
             music_name = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
         else:
             musics_directory = '../ApplicationMusics'
+            #TODO - é recolher contexto, emoção atual da pessoa,
+                # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
             music_name = 'Sad music 1 minute.mp3'
         self.music_thread = MusicThread(musics_directory, music_name)
         self.music_thread.finished_music_signal.connect(self.music_finished)
@@ -933,42 +938,46 @@ class MusicsWindow(QMainWindow):
         )
         return reply
 
-    def save_progress_to_csv(self):
+    def save_bdp_progress_to_csv(self):
         global current_user_name
         global current_user_bpd_progress
-        global musics_listened_by_current_user
+        global musics_listened_by_current_user_in_current_session
+
+        #Check if the user didn't listen to anything
+        if current_user_bpd_progress == 0:
+            return
+
         first_write = not os.path.isfile('../users.csv')  # checks if file exists
         user_line_number = -1
         progress = -1
-        musics_listened_last_session = '' # List of musics that the user listened before the current session
+        every_music_listened = '' # List of musics that the user listened before the current session
         lines = []
         if not first_write:
             with open('../users.csv', 'r', encoding='utf-8') as file:
                 for i, line in enumerate(file):
                     if i == 0:
                         continue # Ignore header line in the file
-                    line = line[:-1] # Remove the '\n' character
+                    line = line.replace('\n', '') # Remove the '\n' character
                     line_content = line.split('~~~')
                     lines.append(line_content)
                     user_name = line_content[0]
                     if user_name == current_user_name.lower():
                         progress = line_content[1]
-                        musics_listened_last_session = line_content[2]
+                        every_music_listened = line_content[2]
                         user_line_number = i
 
-        # If the current user has progress to update in the csv file
         delimiter = '~~~'
-
-        for music in musics_listened_by_current_user:
-            musics_listened_last_session += music + '___'
-        musics_listened_last_session = musics_listened_last_session[:-3] # Remove the last '___'
+        for music in musics_listened_by_current_user_in_current_session:
+            if every_music_listened != '':
+                every_music_listened += '___'
+            every_music_listened += music
 
         if progress and int(progress) != current_user_bpd_progress:
             if user_line_number != -1:
                 # If the user already exists, then update the progress
-                lines[user_line_number] = [current_user_name.lower(), str(current_user_bpd_progress), musics_listened_last_session]
+                lines[user_line_number-1] = [current_user_name.lower(), str(current_user_bpd_progress), every_music_listened]
             else:
-                lines.append([current_user_name.lower(), str(current_user_bpd_progress), musics_listened_last_session])
+                lines.append([current_user_name.lower(), str(current_user_bpd_progress), every_music_listened])
 
             with open('../users.csv', 'w', newline='', encoding='utf-8') as f:
                 header = ['USERNAME', 'DATASET_PROGRESS', 'MUSICS_LISTENED']
@@ -991,7 +1000,7 @@ class MusicsWindow(QMainWindow):
 
         # If data has values, append to csv file to build the dataset
         if data:
-            with open('../dataset_for_model_training.csv', 'a', newline='') as file:
+            with open('../dataset_for_model_training.csv', 'a', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
                 if first_write:
                     header_row = ['date', 'initial_emotion', 'music_name',
@@ -1005,7 +1014,7 @@ class MusicsWindow(QMainWindow):
                 for record in data:
                     writer.writerow(record.values())
 
-        self.save_progress_to_csv()
+        self.save_bdp_progress_to_csv()
 
     def quit_button_clicked(self):
         reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
@@ -1113,6 +1122,7 @@ class MusicsWindow(QMainWindow):
         self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
         self.is_rating_music = False
         musics_listened_by_current_user.append(new_record['music_name'])
+        musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
         self.switch_layout()
         current_time = datetime.now().strftime("%d/%m/%YT%H:%M:%S")  # gets record data
@@ -1197,7 +1207,7 @@ class MusicsWindow(QMainWindow):
     def finished_btn_clicked(self):
         global is_in_building_dataset_phase
         is_in_building_dataset_phase = False
-        self.save_progress_to_csv()
+        self.save_bdp_progress_to_csv()
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
         self.close()
