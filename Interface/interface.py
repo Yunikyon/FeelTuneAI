@@ -332,18 +332,16 @@ class MusicsWindow(QMainWindow):
         self.music_is_paused = False
 
         # Music Thread Initialization
-        musics_directory = ''
-        music_name = ''
         if is_in_building_dataset_phase:
             musics_directory = '../BuildingDatasetPhaseMusics'
             # music_name = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
-            music_name = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
+            # music_name = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
         else:
             musics_directory = '../ApplicationMusics'
             #TODO - é recolher contexto, emoção atual da pessoa,
                 # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
-            music_name = 'Sad music 1 minute.mp3'
-        self.music_thread = MusicThread(musics_directory, music_name)
+            # music_name = 'Sad music 1 minute.mp3'
+        self.music_thread = MusicThread(musics_directory)
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
         # Emotion Thread Initialization
@@ -449,7 +447,7 @@ class MusicsWindow(QMainWindow):
 
             self.progress_slider = QSlider(Qt.Horizontal)
             self.progress_slider.setMinimum(0)
-            self.progress_slider.setValue(current_user_bpd_progress)  # TODO - colocar a percentagem de treino do user
+            self.progress_slider.setValue(current_user_bpd_progress)
             self.progress_slider.setMaximum(100)
             self.progress_slider.setSingleStep(round(100/self.music_files_length))
             self.progress_slider.setMaximumSize(800, 40)
@@ -1178,15 +1176,26 @@ class MusicsWindow(QMainWindow):
         global new_record
         # global is_in_building_dataset_phase
         # if is_in_building_dataset_phase:
+        music_name = self.pick_next_music_to_play_in_BDP()
 
         # new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
-        new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
+        # new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
+        new_record['music_name'] = music_name
         self.music_thread.start()
         self.music_playing = True
         self.switch_layout()
 
+    def pick_next_music_to_play_in_BDP(self):
+        global musics_listened_by_current_user
+        while True:
+            random_music = random.choice(self.music_files)
+            if random_music not in musics_listened_by_current_user:
+                break
+
+        self.music_thread.set_music(random_music)
+        return random_music
+
     def music_finished(self):
-        # TODO - colocar músicas de forma dinâmica, não estática
         if not self.music_is_paused:
             global is_in_building_dataset_phase
             if is_in_building_dataset_phase:
@@ -1194,11 +1203,8 @@ class MusicsWindow(QMainWindow):
                 self.emotion_thread.stop_emotions()
                 self.is_rating_music = True
                 self.switch_layout()
-                # TODO - colocar outra música, de forma aleatória
             else:
                 self.emotion_thread.stop_emotions()
-                # self.music_thread.set_music('Calming relaxing music 30 seconds-.mp3')
-                # TODO - colocar outra música, de acordo com a emoção obtida e a desejada - usar o modelo
                 self.music_thread.start()
 
     def new_emotion(self, result):
@@ -1216,11 +1222,11 @@ class MusicsWindow(QMainWindow):
 class MusicThread(QThread):
     finished_music_signal = pyqtSignal()
 
-    def __init__(self, directory, music_name, parent=None):
+    def __init__(self, directory, parent=None):
         super().__init__(parent)
 
         self.directory = directory
-        self.music_name = music_name
+        # self.music_name = music_name
 
         self.defined_volume = -1
         self.music_is_paused = False
@@ -1473,14 +1479,20 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
     def continue_button_clicked(self):
         global new_record
-        # global is_in_building_dataset_phase
-        #
-        # if is_in_building_dataset_phase:
-        #     new_music =
+        global is_in_building_dataset_phase
+
         # new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
-        new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
+        # new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
 
         self.nextWindow = MusicsWindow()
+
+        if is_in_building_dataset_phase:
+            music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
+        else:
+            #TODO - com o algoritmo treinado
+            music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
+
+        new_record['music_name'] = music_name
         self.nextWindow.show()
         self.close()
 
