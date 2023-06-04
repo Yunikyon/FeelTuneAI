@@ -52,6 +52,9 @@ def getJsonResponseFromUrl(url, header_args=""):
     except ConnectionError as e:
         print("ERROR: ", e)
         return None
+    except:
+        print("ERROR Making request")
+        return None
 
 
 def getResponseFromUrl(url):

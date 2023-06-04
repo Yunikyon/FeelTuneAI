@@ -63,8 +63,11 @@ def execute():
 
         values.append(new_record)
 
-    df2 = pd.DataFrame(values)
-    df3 = pd.merge(df_mylocation, df2, on='globalIdLocal')
+    if len(values) == 0:
+        df3 = df_mylocation
+    else:
+        df2 = pd.DataFrame(values)
+        df3 = pd.merge(df_mylocation, df2, on='globalIdLocal')
 
     # -------------------------- TRANSFORM PROCESS --------------------------
     def get_code_to_value_transformation():
@@ -102,21 +105,22 @@ def execute():
             weather_id = df3.at[index, 'idWeatherType']
             df3.at[index, 'idWeatherType'] = transform.get_weather_type(info_weather_type, weather_id)
 
-        # result = transform.transform_hours_into_day_classification(df3.at[index, 'currentTime'])
-        # df3['timeOfDay'] = result.rstrip('\r')
-
         # --- sunrise and sunset attributes transformation ---
-        sunrise = df3.at[index, 'sunrise']
-        sunset = df3.at[index, 'sunset']
-        df3.at[index, 'sunrise'] = datetime.strptime(sunrise, '%I:%M:%S %p').time()
-        df3.at[index, 'sunset'] = datetime.strptime(sunset, '%I:%M:%S %p').time()
+        if 'sunrise' in df3.columns and 'sunset' in df3.columns:
+            sunrise = df3.at[index, 'sunrise']
+            sunset = df3.at[index, 'sunset']
+            df3.at[index, 'sunrise'] = datetime.strptime(sunrise, '%I:%M:%S %p').time()
+            df3.at[index, 'sunset'] = datetime.strptime(sunset, '%I:%M:%S %p').time()
 
         df3['timeOfDay'] = transform.transform_hours_into_day_classification(df3.at[index, 'currentTime'])
+        df3['isWorkDay'] = transform.get_is_work_day(df3.at[index, 'currentTime'])
 
     end_time = datetime.now()
     print(f"Finished Extraction and Transform Process at {end_time.strftime('%H:%M:%S')}")
     print(f"Time elapsed: {(end_time - start_time).total_seconds()} seconds")
 
-    df3.drop(labels=['longitude', 'latitude', 'globalIdLocal', 'forecastDate', 'updateTime', 'distance', 'currentTime'], axis=1, inplace=True)
+    df3.drop(labels=['longitude', 'latitude', 'globalIdLocal', 'forecastDate',
+                     'updateTime', 'distance', 'currentTime', 'local', 'predWindDir',
+                     'wind_degrees'], axis=1, inplace=True)
     return df3
 
