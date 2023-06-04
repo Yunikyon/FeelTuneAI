@@ -167,7 +167,7 @@ def analyze(img_path, actions=('emotion', 'age', 'gender', 'race'), model=None, 
                                                     enforce_detection=enforce_detection,
                                                     detector_backend=detector_backend, return_region=True)
 
-            if img == []:
+            if len(img) == 0:
                 resp_obj["emotion"] = {}
                 for i in range(0, len(emotion_labels)):
                     emotion_label = emotion_labels[i]

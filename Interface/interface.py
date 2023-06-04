@@ -2,12 +2,14 @@ import csv
 import os
 import shutil
 import threading
+import warnings
 from datetime import datetime
 from threading import Event
 from time import sleep
 
 import cv2
 import librosa
+from mutagen.mp3 import MP3
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -71,63 +73,60 @@ class Color(QWidget):
         palette.setColor(QPalette.Window, QColor(color))
         self.setPalette(palette)
 
+class CircleProgressWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.progress = 0
+        self.duration = 0
 
-class CircleAnimation(QWidget):
-    def __init__(self):
-        super().__init__()
+        # Configure Pygame Mixer
+        pygame.mixer.init()
 
-        self.circles = []
+        # Create a timer to update the progress every second
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_animation)
-        self.timer.start(250)  # Add a circle every second
+        self.timer.timeout.connect(self.update_progress)
+        self.timer.start(1000)
 
-    def update_animation(self):
-        # Add a new circle at a random position
-        width = self.width()
-        height = self.height()
-        x = random.randint(150, width - 150)
-        y = random.randint(120, height - 120)
-        color = QColor(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        self.circles.append((QRect(x, y, 1, 1), color))
+    def set_duration(self, duration):
+        self.duration = duration
+
+    def set_progress(self, progress):
+        self.progress = progress
         self.update()
 
+    def update_progress(self):
+        # Get the current position of the music playback
+        position = pygame.mixer.music.get_pos() // 1000
+        self.set_progress(position)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
 
-        # Create a copy of the circles list
-        circles_copy = self.circles[:]
+        # Set the outer circle parameters
+        # outer_radius = min(self.width(), self.height()) / 2 - 10
+        outer_radius = min(250, 250) / 2 - 10
+        outer_center = self.rect().center()
 
-        # Draw all circles
-        for circle, color in circles_copy:
-            pen = QPen(color)
-            pen.setWidth(10)
-            painter.setPen(pen)
-            painter.drawEllipse(circle)
+        # Set the inner circle parameters
+        inner_radius = outer_radius - 20
+        inner_center = outer_center
 
-        # Remove circles that have faded away
-        self.circles = [(circle, color) for circle, color in self.circles if color.alpha() > 0]
+        # Draw the outer circle
+        pen = QPen(QColor(207, 186, 163))
+        pen.setWidth(10)
+        painter.setPen(pen)
+        painter.drawEllipse(outer_center, outer_radius, outer_radius)
 
-        # Adjust size and fade out existing circles
-        for i, (circle, color) in enumerate(self.circles):
-            alpha = color.alpha()
-            alpha -= 1  # Adjust fade-out speed here
-            if alpha <= 0:
-                del self.circles[i]  # Remove the circle after fading out completely
-            else:
-                # Adjust growth speed and position here
-                if circle.width() < 350:
-                    size = circle.width() + 0.55
-                    x = circle.x() + circle.width() // 2 - round(size) // 2
-                    y = circle.y() + circle.height() // 2 - round(size) // 2
-                    self.circles[i] = (QRect(x, y, round(size), round(size)), QColor(color.red(), color.green(), color.blue(), alpha))
-                else:
-                    size = circle.width() + 0.5
-                    x = circle.x() + circle.width() // 2 - round(size) // 2
-                    y = circle.y() + circle.height() // 2 - round(size) // 2
-                    self.circles[i] = (QRect(x, y, round(size), round(size)), QColor(color.red(), color.green(), color.blue(), 0))
+        # Draw the progress arc
+        pen.setColor(QColor(247, 201, 151))
+        painter.setPen(pen)
+        start_angle = 90 * 16  # 90 degrees in 1/16th of a degree
+        span_angle = -self.progress * 360 * 16 / self.duration
+        painter.drawArc(int(inner_center.x() - inner_radius), int(inner_center.y() - inner_radius),
+                        int(inner_radius * 2), int(inner_radius * 2), int(start_angle), int(span_angle))
+
+    def resizeEvent(self, event):
         self.update()
 
 
@@ -324,7 +323,7 @@ class MusicsWindow(QMainWindow):
 
         self.slider_value = 10
         self.slider_value_initial_position = 0
-        self.music_playing = True
+        self.music_playing = False
         self.is_rating_music = False
 
         self.stacked_widget = QStackedWidget()
@@ -339,9 +338,11 @@ class MusicsWindow(QMainWindow):
         else:
             musics_directory = '../ApplicationMusics'
             #TODO - é recolher contexto, emoção atual da pessoa,
-                # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
-            # music_name = 'Sad music 1 minute.mp3'
+            # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
+
+            music_name = 'Sad music 1 minute.mp3'
         self.music_thread = MusicThread(musics_directory)
+        self.music_thread.set_music("NA")
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
         # Emotion Thread Initialization
@@ -437,13 +438,30 @@ class MusicsWindow(QMainWindow):
             # Slider value
             self.slider_value_label = QLineEdit(str(current_user_bpd_progress) + "%")
             self.slider_value_label.setReadOnly(True)
+
             slider_font = self.slider_value_label.font()
             slider_font.setPointSize(13)
             self.slider_value_label.setFont(slider_font)
-            self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0)}");
+
+            self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
             self.slider_value_label.setMaximumSize(800, 30)
+            self.slider_value_label.setContentsMargins(170 + int(current_user_bpd_progress * 7.7), -10, 0, 0)
+
             self.slider_value_label.textChanged.connect(self.move_slider_label)
             progress_layout_vertical.addWidget(self.slider_value_label)
+
+
+            progress_line_layout = QHBoxLayout()
+            progress_line_layout.setContentsMargins(0, 0, 0, 0)
+            progress_line_layout.setSpacing(20)
+
+            progress_label = QLabel("Progress")
+            progress_font = progress_label.font()
+            progress_font.setPointSize(15)
+            progress_label.setFont(progress_font)
+            progress_label.setMaximumSize(100, 60)
+            progress_line_layout.addWidget(progress_label)
+
 
             self.progress_slider = QSlider(Qt.Horizontal)
             self.progress_slider.setMinimum(0)
@@ -456,16 +474,22 @@ class MusicsWindow(QMainWindow):
                                             "margin: 2px 0;} "
                                           "QSlider::handle:horizontal "
                                           "{background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f7c997, stop:1 #ffffff);"
-                                            "border: 1px solid #f7c997; width: 18px;"
+                                            "border: 1px solid #f7c997; width: 0px;"
                                             "margin: -5px 0; border-radius: 3px;}"
                                           "QSlider::add-page:horizontal {background: white}"
                                           "QSlider::sub-page:horizontal {background: #ffd7ab}")
             self.progress_slider.valueChanged.connect(self.slider_value_changed)
             self.progress_slider.setEnabled(False)
+            progress_line_layout.addWidget(self.progress_slider)
 
-            progress_layout_vertical.addWidget(self.progress_slider)
+            progress_line_widget = QWidget()
+            progress_line_widget.setLayout(progress_line_layout)
+            progress_line_widget.setMaximumSize(1000, 80)
+            progress_line_widget.setMinimumSize(1000, 80)
+
+            progress_layout_vertical.addWidget(progress_line_widget)
             progress_layout_vertical_widget = QWidget()
-            progress_layout_vertical_widget.setMaximumSize(2000, 80)
+            progress_layout_vertical_widget.setMaximumSize(2000, 110)
             progress_layout_vertical_widget.setLayout(progress_layout_vertical)
 
             base_layout.addWidget(progress_layout_vertical_widget)
@@ -479,28 +503,24 @@ class MusicsWindow(QMainWindow):
         circle_layout.setAlignment(Qt.AlignHCenter)
 
         # Create a label to display the GIF
-        gif_layout = QHBoxLayout()
-        gif_layout.setAlignment(Qt.AlignHCenter)
+        music_progress_layout = QHBoxLayout()
+        music_progress_layout.setAlignment(Qt.AlignHCenter)
 
-        gif_label = QLabel()
-        self.audio_gif = QMovie("./images/audio-wave-animation.gif")
-        gif_label.setMovie(self.audio_gif)
-        gif_label.setMinimumSize(150, 400)
-        gif_label.setMaximumSize(150, 400)
-        gif_layout.addWidget(gif_label)
+        blank_space = QLabel()
+        blank_space.setMinimumSize(150, 10)
+        blank_space.setMaximumSize(150, 10)
+        circle_layout.addWidget(blank_space)
 
-        gif_widget = QWidget()
-        gif_widget.setLayout(gif_layout)
-        gif_widget.setMaximumSize(600, 400)
-        gif_widget.setMinimumSize(600, 400)
-        circle_layout.addWidget(gif_widget)
+        self.music_progress = CircleProgressWidget()
+        self.music_progress.setMaximumSize(400, 400)
+        self.music_progress.setMinimumSize(400, 400)
+        music_progress_layout.addWidget(self.music_progress)
 
-        self.audio_gif.start()
-
-        # circle_animation = CircleAnimation()
-        # circle_animation.setMaximumSize(800, 400)
-        # circle_animation.setMinimumSize(800, 400)
-        # circle_layout.addWidget(circle_animation)
+        music_progress_widget = QWidget()
+        music_progress_widget.setLayout(music_progress_layout)
+        music_progress_widget.setMaximumSize(600, 400)
+        music_progress_widget.setMinimumSize(600, 400)
+        circle_layout.addWidget(music_progress_widget)
 
         volume_slider_layout = QHBoxLayout()
         volume_slider_layout.setAlignment(Qt.AlignRight)
@@ -518,7 +538,7 @@ class MusicsWindow(QMainWindow):
                                            "margin: 2px 0;} "
                                            "QSlider::handle:vertical "
                                            "{background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #6a6a6a, stop:1 #4d4d5d);"
-                                           "border: 1px solid #4d4d5d;  height: 5px;"
+                                           "border: 1px solid #4d4d5d;  height: 8px;"
                                            "margin: 0px -8px; border-radius: 3px;}"
                                            "QSlider::sub-page:vertical {background: #a2a2a2}"
                                            "QSlider::add-page:vertical {background: #4d4d5d}")
@@ -906,7 +926,7 @@ class MusicsWindow(QMainWindow):
 
     def move_slider_label(self, value):
         value_number = strip(value.split('%')[0])
-        self.slider_value_label.move(QPoint(190 + round(int(value_number) * 7.7), 14))
+        self.slider_value_label.move(QPoint(int(int(value_number) * 8.5), 14))
 
     def volume_slider_value_changed(self, value):
         self.music_thread.set_volume(value/100)
@@ -919,7 +939,6 @@ class MusicsWindow(QMainWindow):
             self.pause_button.setIcon(QIcon("./images/play_btn.png"))
             self.pause_button.setProperty("icon_name", "play")
             self.pause_button.setIconSize(QSize(30, 30))
-            self.audio_gif.stop()
         else:
             self.music_thread.resume_music()
             self.emotion_thread.resume_emotions()
@@ -927,7 +946,6 @@ class MusicsWindow(QMainWindow):
             self.pause_button.setIcon(QIcon("./images/pause_btn.png"))
             self.pause_button.setProperty("icon_name", "pause")
             self.pause_button.setIconSize(QSize(30, 30))
-            self.audio_gif.start()
 
     def confirm_warning(self, title, message):
         reply = QMessageBox.warning(
@@ -988,8 +1006,10 @@ class MusicsWindow(QMainWindow):
     def stop_threads(self):
         self.music_thread.pause_music()
         self.music_thread.exit(0)
-        self.emotion_thread.pause_emotions()
+        self.music_thread = None
+        self.emotion_thread.stop_emotions()
         self.emotion_thread.exit(0)
+        self.emotion_thread = None
 
     def save_user_progress(self):
         global data
@@ -1193,6 +1213,11 @@ class MusicsWindow(QMainWindow):
                 break
 
         self.music_thread.set_music(random_music)
+
+        # Set the duration of the music using Mutagen
+        audio = MP3("../BuildingDatasetPhaseMusics/"+random_music)
+        self.music_progress.set_duration(int(audio.info.length))
+
         return random_music
 
     def music_finished(self):
@@ -1245,6 +1270,8 @@ class MusicThread(QThread):
 
     def set_music(self, music_name):
         self.music_name = music_name
+
+
         
     def set_directory(self, directory):
         self.directory = directory
@@ -1276,6 +1303,8 @@ class MusicThread(QThread):
 class EmotionsThread(QThread):
     new_emotion = pyqtSignal()
 
+    warnings.simplefilter("error")
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -1294,7 +1323,7 @@ class EmotionsThread(QThread):
         global new_record
 
         self.emotions_running = False
-        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]
+        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1] # TODO - dá erro quando nunca se apanha uma emoção
         new_record['last_emotion'] = last_emotion
         new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions
 
@@ -1479,22 +1508,23 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
     def continue_button_clicked(self):
         global new_record
-        global is_in_building_dataset_phase
-
-        # new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
-        # new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
 
         self.nextWindow = MusicsWindow()
 
-        if is_in_building_dataset_phase:
-            music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
+        success, frames = self.nextWindow.emotion_thread.video.read()
+        if not success:
+            QMessageBox.information(
+                self, "Error", "Your camera is not properly working,\n please fix that and try again",
+                QMessageBox.Ok,
+            )
         else:
-            #TODO - com o algoritmo treinado
+            self.nextWindow.music_playing = True
+            self.nextWindow.switch_layout()
             music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
 
-        new_record['music_name'] = music_name
-        self.nextWindow.show()
-        self.close()
+            new_record['music_name'] = music_name
+            self.nextWindow.show()
+            self.close()
 
     def select_mp3_file(self):
         file_dialog = QFileDialog()
@@ -1804,13 +1834,29 @@ class ApplicationHomeScreen(QMainWindow):
         self.setCentralWidget(base_widget)
 
     def show_next_window(self):
-        self.nextWindow = MusicsWindow()
-        self.nextWindow.show()
-        self.close()
+        global new_record
 
+        self.nextWindow = MusicsWindow()
+
+        success, frames = self.nextWindow.emotion_thread.video.read()
+        if not success:
+            QMessageBox.information(
+                self, "Error", "Your camera is not properly working,\n please fix that and try again",
+                QMessageBox.Ok,
+            )
+        else:
+            self.nextWindow.music_playing = True
+            self.nextWindow.switch_layout()
+
+            # TODO - com o algoritmo treinado
+            music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
+
+            new_record['music_name'] = music_name
+            self.nextWindow.show()
+            self.close()
 
 def main():
-    # download_musics(['https://www.youtube.com/watch?v=znWi3zN8Ucg', 'https://www.youtube.com/watch?v=tEwvUu1dBTs'], '../BuildingDatasetPhaseMusics')
+    # download_musics(['https://www.youtube.com/watch?v=JHt63PDc6Qc', 'bla bla bla'], '../BuildingDatasetPhaseMusics')
     # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
     app = QApplication([])
     window = LoginWindow()
