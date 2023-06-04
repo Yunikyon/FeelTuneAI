@@ -175,7 +175,7 @@ def preprocess_face(img, target_size=(224, 224), grayscale = False, enforce_dete
 	base_img = img.copy()
 
 	img, region = detect_face(img = img, detector_backend = detector_backend, grayscale = grayscale, enforce_detection = enforce_detection, align = align)
-	if img == []: # In case didnt detect any face
+	if len(img) == 0: # In case didnt detect any face
 		return [], None
 
 	#--------------------------

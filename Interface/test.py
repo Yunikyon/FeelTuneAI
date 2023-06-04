@@ -1,60 +1,33 @@
-import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPainter, QColor, QPen
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QCursor
 
 
-class WaveAnimation(QWidget):
+class SliderWithCustomCursor(QSlider):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+
+
+class SliderExample(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.amplitude = 10  # Wave amplitude
-        self.period = 200  # Wave period
-        self.phase_shift = 0  # Wave phase shift
-        self.step = 10  # Animation step size
+        layout = QVBoxLayout()
 
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_animation)
-        self.timer.start(100)  # Update animation every 50 milliseconds
+        self.slider = SliderWithCustomCursor(Qt.Horizontal)
+        self.slider.setMinimum(0)
+        self.slider.setMaximum(100)
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        width = self.width()
-        height = self.height()
-        center_y = height / 2
-
-        pen = QPen(QColor(0, 0, 255))
-        pen.setWidth(2)
-        painter.setPen(pen)
-
-        for x in range(width):
-            # Calculate the normalized x-coordinate within the wave period
-            t = (x + self.phase_shift) % self.period / self.period
-            y = center_y + self.amplitude * (2 * self.normalized_sine(t) - 1)
-            painter.drawPoint(round(x), round(y))
-
-    def normalized_sine(self, value):
-        return (1 + (1 / 2) * (2 * value - 1) + (1 / 2) * (2 * value - 1) ** 3) / 2
-
-    def update_animation(self):
-        print("update")
-        self.phase_shift += self.step
-        self.update()
-        print("updated")
-
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle('Ocean Wave Animation')
-        self.setGeometry(100, 100, 800, 400)
-        self.setCentralWidget(WaveAnimation())
+        layout.addWidget(self.slider)
+        self.setLayout(layout)
 
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    window = MainWindow()
+    app = QApplication([])
+    window = SliderExample()
     window.show()
-    sys.exit(app.exec_())
+    app.exec_()
