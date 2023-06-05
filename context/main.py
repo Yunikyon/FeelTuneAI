@@ -6,8 +6,10 @@ import geocoder
 from geopy.distance import geodesic
 
 
+
 def execute():
     # -------------------------- EXTRACTION PROCESS --------------------------
+    has_weather_api_problem = False
     start_time = datetime.now()
     print(f"Beginning Context Extract and Transformation Process at {start_time.strftime('%H:%M:%S')}")
 
@@ -33,26 +35,30 @@ def execute():
     values = []
     for index, row in df_mylocation.iterrows():
         response = extract.getJsonResponseFromUrl(f"https://api.sunrise-sunset.org/json?lat={row['latitude']}&lng={row['longitude']}&date={row['forecastDate']}")
-        if response is None:
-            continue
-        response = response.json()
-        new_record = {'globalIdLocal': row['globalIdLocal'], 'currentTime': datetime.now().strftime("%Y-%m-%dT%H:%M:%S")}
-        if response['status'] == 'OK':
-            sunrise = response['results']['sunrise']
-            sunset = response['results']['sunset']
-            day_length = response['results']['day_length']
-            new_record['sunrise'] = sunrise
-            new_record['sunset'] = sunset
-            new_record['day_length'] = day_length
-        else:
-            new_record['sunrise'] = "N/A"
-            new_record['sunset'] = "N/A"
-            new_record['day_length'] = "N/A"
+        new_record = {'globalIdLocal': row['globalIdLocal'],
+                      'currentTime': datetime.now().strftime("%Y-%m-%dT%H:%M:%S")}
+        if response is not None:
+            response = response.json()
+            if response['status'] == 'OK':
+                sunrise = response['results']['sunrise']
+                sunset = response['results']['sunset']
+                day_length = response['results']['day_length']
+                new_record['sunrise'] = sunrise
+                new_record['sunset'] = sunset
+                new_record['day_length'] = day_length
+            else:
+                new_record['sunrise'] = "N/A"
+                new_record['sunset'] = "N/A"
+                new_record['day_length'] = "N/A"
+
+        new_record['timeOfDay'] = transform.transform_hours_into_day_classification(new_record['currentTime'])
+        new_record['isWorkDay'] = transform.get_is_work_day(new_record['currentTime'])
 
         responseWeatherApi = extract.getJsonResponseFromUrl(
             f"https://api.api-ninjas.com/v1/weather?lat={row['latitude']}&lon={row['longitude']}",
             "X-Api-Key:gsNY5AepnuvZYcIOG0q4rg==W9sSXxN89hDQSAi0")
         if responseWeatherApi is None:
+            has_weather_api_problem = True
             values.append(new_record)
             continue
         responseWeatherApi = responseWeatherApi.json()
@@ -113,15 +119,15 @@ def execute():
             df3.at[index, 'sunrise'] = datetime.strptime(sunrise, '%I:%M:%S %p').time()
             df3.at[index, 'sunset'] = datetime.strptime(sunset, '%I:%M:%S %p').time()
 
-        df3['timeOfDay'] = transform.transform_hours_into_day_classification(df3.at[index, 'currentTime'])
-        df3['isWorkDay'] = transform.get_is_work_day(df3.at[index, 'currentTime'])
-
     end_time = datetime.now()
     print(f"Finished Extraction and Transform Process at {end_time.strftime('%H:%M:%S')}")
     print(f"Time elapsed: {(end_time - start_time).total_seconds()} seconds")
 
-    df3.drop(labels=['longitude', 'latitude', 'globalIdLocal', 'forecastDate',
-                     'updateTime', 'distance', 'currentTime', 'local', 'predWindDir',
-                     'wind_degrees'], axis=1, inplace=True)
+    if has_weather_api_problem:
+        df3.drop(labels=['longitude', 'latitude', 'globalIdLocal', 'forecastDate',
+                     'updateTime', 'distance', 'currentTime', 'local', 'predWindDir'], axis=1, inplace=True)
+    else:
+        df3.drop(labels=['longitude', 'latitude', 'globalIdLocal', 'forecastDate',
+                         'updateTime', 'distance', 'currentTime', 'local', 'predWindDir', 'wind_degrees'], axis=1, inplace=True)
     return df3
 
