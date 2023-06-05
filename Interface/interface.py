@@ -9,6 +9,7 @@ from time import sleep
 
 import cv2
 import librosa
+import pandas as pd
 from mutagen.mp3 import MP3
 
 import context.main as contextMain
@@ -1240,12 +1241,26 @@ class MusicsWindow(QMainWindow):
         print(result)
 
     def finished_btn_clicked(self):
+        global current_user_name
         global is_in_building_dataset_phase
         is_in_building_dataset_phase = False
 
         self.save_bdp_progress_to_csv()
+        self.save_user_progress()
 
-        
+        with open('../dataset_for_model_training.csv', 'r') as file_obj:
+            reader_obj = csv.reader(file_obj)
+
+            # Skips the heading using next() method
+            next(file_obj)
+
+            df = pd.read_csv(file_obj)
+            filtered_df = df[df['username'] == current_user_name]
+            filtered_df.drop(labels=['username'], axis=1, inplace=True)
+
+            # for row in reader_obj:
+            #     dataset = {''}
+
 
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
@@ -1864,14 +1879,14 @@ class ApplicationHomeScreen(QMainWindow):
             self.close()
 
 def main():
-    download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
+    # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
     # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
-    # app = QApplication([])
-    # window = LoginWindow()
+    app = QApplication([])
+    window = LoginWindow()
     # window = MusicsWindow()
     # window = ApplicationHomeScreen()
-    # window.show()
-    # app.exec()
+    window.show()
+    app.exec()
 
 
 if __name__ == "__main__":
