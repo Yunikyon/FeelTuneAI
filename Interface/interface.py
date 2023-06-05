@@ -923,10 +923,9 @@ class MusicsWindow(QMainWindow):
     def slider_value_changed(self, value):
         self.slider_value = value
         self.slider_value_label.setText(str(value)+"%")
-
     def move_slider_label(self, value):
         value_number = strip(value.split('%')[0])
-        self.slider_value_label.move(QPoint(int(int(value_number) * 8.5), 14))
+        self.slider_value_label.move(QPoint(int(int(value_number) * (self.slider_value_label.width()/100) + 90), 14))
 
     def volume_slider_value_changed(self, value):
         self.music_thread.set_volume(value/100)
@@ -1215,7 +1214,7 @@ class MusicsWindow(QMainWindow):
         self.music_thread.set_music(random_music)
 
         # Set the duration of the music using Mutagen
-        audio = MP3("../BuildingDatasetPhaseMusics/"+random_music)
+        audio = MP3(self.music_thread.directory+"/"+random_music)
         self.music_progress.set_duration(int(audio.info.length))
 
         return random_music
