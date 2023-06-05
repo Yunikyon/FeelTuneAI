@@ -1,3 +1,5 @@
+from datetime import datetime
+import context.extract as extract
 import numpy as np
 
 
@@ -57,4 +59,25 @@ def transform_hours_into_day_classification(date):
     Evening: 6pm to 9pm
     Nighttime: 9pm to 12am
 '''
+
+
+def get_is_work_day(date):
+    if date is None:
+        return None
+    if "T" not in date:
+        return None
+    day = date.split("T")[0]
+    day = datetime.strptime(day, '%Y-%m-%d').date()
+    if day.weekday() < 5:
+        return 'Yes'
+    # Call api to check whether current day is an holiday or not
+    api_key = "3db2fcbdd9654b2d8d0483278ec5a7c3"
+    d, m, y = day.day, day.month, day.year
+    result = extract.getJsonResponseFromUrl(f"https://holidays.abstractapi.com/v1?api_key={api_key}&country=PT&day={d}&month={m}&year={y}")
+    if result is None:
+        return 'No'
+    result = result.json()
+    if len(result) == 0:
+        return 'No'
+    return 'Yes'
 

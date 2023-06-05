@@ -22,13 +22,14 @@ from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLa
 from numpy.core.defchararray import strip
 import random
 
-from download_from_yt import download_musics
+from download_from_yt import download_musics, download_musics_from_csv
 from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
 
 current_user_name = ''
 is_in_building_dataset_phase = True
 current_user_bpd_progress = 0
 music_files_bdp_length = 0
+has_user_finished_first_iteration_of_bdp = False
 musics_listened_by_current_user = [] # To choose what music to play next
 musics_listened_by_current_user_in_current_session = []
 last_context_data = ""
@@ -856,8 +857,8 @@ class MusicsWindow(QMainWindow):
         congrats_font = congrats_label.font()
         congrats_font.setPointSize(20)
         congrats_label.setFont(congrats_font)
-        congrats_label.setMaximumSize(240, 70)
-        congrats_label.setMinimumSize(240, 70)
+        congrats_label.setMaximumSize(200 + len(current_user_name), 70)
+        congrats_label.setMinimumSize(240 + len(current_user_name), 70)
         congrats_layout.addWidget(congrats_label)
 
         congrats_widget = QWidget()
@@ -1020,7 +1021,7 @@ class MusicsWindow(QMainWindow):
             with open('../dataset_for_model_training.csv', 'a', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
                 if first_write:
-                    header_row = ['date', 'initial_emotion', 'music_name',
+                    header_row = ['username', 'listenedAt', 'initial_emotion', 'music_name',
                                   'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
 
                     for attribute in context_headers_to_dataset:
@@ -1126,7 +1127,6 @@ class MusicsWindow(QMainWindow):
             context_values = context_values.split(',')
             context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
             return context_dict
-
         return {}
 
     def emotion_rated(self, emotion):
@@ -1134,6 +1134,7 @@ class MusicsWindow(QMainWindow):
         global new_record
         global musics_listened_by_current_user
         global current_user_bpd_progress
+        global current_user_name
 
         self.setDisabled(True)
         self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
@@ -1142,9 +1143,9 @@ class MusicsWindow(QMainWindow):
         musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
         self.switch_layout()
-        current_time = datetime.now().strftime("%d/%m/%YT%H:%M:%S")  # gets record data
+        current_time = datetime.now().strftime("%H:%M:%S")  # gets record data
 
-        new_dict = {'date': current_time, 'initial_emotion': new_record['initial_emotion'],
+        new_dict = {'username': current_user_name, 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
                     'music_name': new_record['music_name'],
                     'last_emotion': new_record['last_emotion'],
                     'rated_emotion': emotion,
@@ -1197,8 +1198,6 @@ class MusicsWindow(QMainWindow):
         # if is_in_building_dataset_phase:
         music_name = self.pick_next_music_to_play_in_BDP()
 
-        # new_record['music_name'] = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
-        # new_record['music_name'] = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
         new_record['music_name'] = music_name
         self.music_thread.start()
         self.music_playing = True
@@ -1206,10 +1205,19 @@ class MusicsWindow(QMainWindow):
 
     def pick_next_music_to_play_in_BDP(self):
         global musics_listened_by_current_user
-        while True:
+        global has_user_finished_first_iteration_of_bdp
+
+        #TODO - falta fazer com que o progresso = 100 nao seja só até acabar o music files
+        if not has_user_finished_first_iteration_of_bdp and len(musics_listened_by_current_user) == self.music_files_length:
+            has_user_finished_first_iteration_of_bdp = True
+
+        if has_user_finished_first_iteration_of_bdp:
             random_music = random.choice(self.music_files)
-            if random_music not in musics_listened_by_current_user:
-                break
+        else:
+            while True:
+                random_music = random.choice(self.music_files)
+                if random_music not in musics_listened_by_current_user:
+                    break
 
         self.music_thread.set_music(random_music)
 
@@ -1237,7 +1245,11 @@ class MusicsWindow(QMainWindow):
     def finished_btn_clicked(self):
         global is_in_building_dataset_phase
         is_in_building_dataset_phase = False
+
         self.save_bdp_progress_to_csv()
+
+        
+
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
         self.close()
@@ -1855,14 +1867,14 @@ class ApplicationHomeScreen(QMainWindow):
             self.close()
 
 def main():
-    # download_musics(['https://www.youtube.com/watch?v=JHt63PDc6Qc', 'bla bla bla'], '../BuildingDatasetPhaseMusics')
+    download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
     # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
-    app = QApplication([])
-    window = LoginWindow()
+    # app = QApplication([])
+    # window = LoginWindow()
     # window = MusicsWindow()
     # window = ApplicationHomeScreen()
-    window.show()
-    app.exec()
+    # window.show()
+    # app.exec()
 
 
 if __name__ == "__main__":
