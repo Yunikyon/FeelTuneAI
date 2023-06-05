@@ -40,7 +40,6 @@ data = []
 current_music_emotions = ''
 new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '',
               'rated_emotion': '', 'instant_seconds|percentages|dominant_emotion': ''}
-context_headers_to_dataset = ""
 
 goal_emotion = None
 
@@ -1023,10 +1022,10 @@ class MusicsWindow(QMainWindow):
                 writer = csv.writer(file)
                 if first_write:
                     header_row = ['username', 'listenedAt', 'initial_emotion', 'music_name',
-                                  'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion']
-
-                    for attribute in context_headers_to_dataset:
-                        header_row.append(attribute.rstrip('\r'))
+                                  'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion',
+                                  'precipitaProb', 'tMin', 'tMax', 'idWeatherType', 'classWindSpeed',
+                                  'classPrecInt', 'sunrise', 'sunset', 'day_length', 'timeOfDay', 'isWorkDay',
+                                  'cloud_pct', 'temp', 'feels_like', 'humidity', 'min_temp', 'max_temp', 'wind_speed']
 
                     writer.writerow(header_row)
 
@@ -1120,15 +1119,12 @@ class MusicsWindow(QMainWindow):
             context_headers = csv_context.split('\n')[0]
             context_headers = context_headers.split(',')
 
-            global context_headers_to_dataset
-            if len(context_headers_to_dataset) == 0:
-                context_headers_to_dataset = context_headers
-
+            number_of_headers = len(context_headers)
             context_values = csv_context.split('\n')[1]
             context_values = context_values.split(',')
             context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
-            return context_dict
-        return {}
+            return context_dict, number_of_headers
+        return {}, 0
 
     def emotion_rated(self, emotion):
         global data
@@ -1159,8 +1155,9 @@ class MusicsWindow(QMainWindow):
         global last_context_data
         # Update context if there is no context or if 20 minutes have elapsed since last time
         if last_time_context_data_was_called == "" or ((update_time - last_time_context_data_was_called).total_seconds() > 1200):
-            last_time_context_data_was_called = update_time
-            context_dictionary = self.get_context()
+            context_dictionary, number_of_headers = self.get_context()
+            if number_of_headers == 18:
+                last_time_context_data_was_called = update_time
             last_context_data = context_dictionary
         else :
             context_dictionary = last_context_data

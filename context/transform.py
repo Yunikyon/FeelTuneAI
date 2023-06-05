@@ -77,7 +77,8 @@ def get_is_work_day(date):
     if result is None:
         return 'No'
     result = result.json()
-    if len(result) == 0:
+    # If there is a holiday, then the response is not an empty array
+    if len(result) != 0:
         return 'No'
     return 'Yes'
 
