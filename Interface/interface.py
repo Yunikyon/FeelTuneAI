@@ -1128,7 +1128,6 @@ class MusicsWindow(QMainWindow):
             context_values = context_values.split(',')
             context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
             return context_dict
-
         return {}
 
     def emotion_rated(self, emotion):

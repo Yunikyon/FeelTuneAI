@@ -53,6 +53,7 @@ def execute():
             f"https://api.api-ninjas.com/v1/weather?lat={row['latitude']}&lon={row['longitude']}",
             "X-Api-Key:gsNY5AepnuvZYcIOG0q4rg==W9sSXxN89hDQSAi0")
         if responseWeatherApi is None:
+            values.append(new_record)
             continue
         responseWeatherApi = responseWeatherApi.json()
 
@@ -91,7 +92,7 @@ def execute():
 
     for index, row in df3.iterrows():
         # --- classPrecInt attribute transformation ---
-        if  'classPrecInt' in df3.columns:
+        if 'classPrecInt' in df3.columns:
             precipitation_id = df3.at[index, 'classPrecInt']
             df3.at[index, 'classPrecInt'] = transform.get_precipitation_type(info_precipitation_type, precipitation_id)
 
