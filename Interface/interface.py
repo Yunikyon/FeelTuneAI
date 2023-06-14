@@ -1342,7 +1342,7 @@ class EmotionsThread(QThread):
         global new_record
 
         self.emotions_running = False
-        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1] # TODO - dá erro quando nunca se apanha uma emoção
+        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]  # TODO - dá erro quando nunca se apanha uma emoção
         new_record['last_emotion'] = last_emotion
         new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions
 
