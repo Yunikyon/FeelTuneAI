@@ -18,6 +18,7 @@ def my_hook(d):
     if d['status'] == 'finished':
         print('Done downloading, now converting ...')
 
+
 def download_music(youtube_id, directory):
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -35,9 +36,11 @@ def download_music(youtube_id, directory):
         print("downloading new music")
         ydl.download(['https://www.youtube.com/watch?v='+youtube_id])
 
+
 def download_musics(musics_id, directory):
     for music_id in musics_id:
         download_music(music_id, directory)
+
 
 def download_musics_from_csv(csv_file, directory):
     with open(csv_file) as file_obj:

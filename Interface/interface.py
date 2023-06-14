@@ -1258,10 +1258,6 @@ class MusicsWindow(QMainWindow):
             filtered_df = df[df['username'] == current_user_name]
             filtered_df.drop(labels=['username'], axis=1, inplace=True)
 
-            # for row in reader_obj:
-            #     dataset = {''}
-
-
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
         self.close()
@@ -1349,6 +1345,7 @@ class EmotionsThread(QThread):
         last_emotion = current_music_emotions.split(';')[-2].split('|')[-1] # TODO - dá erro quando nunca se apanha uma emoção
         new_record['last_emotion'] = last_emotion
         new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions
+
 
     def append_emotion(self, dominant_emotion, time, percentages):
         global current_music_emotions
