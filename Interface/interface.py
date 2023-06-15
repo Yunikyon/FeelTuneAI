@@ -1,4 +1,5 @@
 import csv
+import math
 import os
 import shutil
 import threading
@@ -442,6 +443,17 @@ class MusicsWindow(QMainWindow):
             progress_layout_vertical.setAlignment(Qt.AlignHCenter)
 
             # Slider value
+            slider_line_layout = QHBoxLayout()
+            slider_line_layout.setContentsMargins(0, 0, 0, 0)
+            slider_line_layout.setSpacing(20)
+
+            slider_blank_space = QLabel()
+            slider_blank_space_font = slider_blank_space.font()
+            slider_blank_space_font.setPointSize(15)
+            slider_blank_space.setFont(slider_blank_space_font)
+            slider_blank_space.setMaximumSize(100, 30)
+            slider_line_layout.addWidget(slider_blank_space)
+
             self.slider_value_label = QLineEdit(str(current_user_bpd_progress) + "%")
             self.slider_value_label.setReadOnly(True)
 
@@ -451,10 +463,15 @@ class MusicsWindow(QMainWindow):
 
             self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
             self.slider_value_label.setMaximumSize(800, 30)
-            self.slider_value_label.setContentsMargins(170 + int(current_user_bpd_progress * 7.7), -10, 0, 0)
 
             self.slider_value_label.textChanged.connect(self.move_slider_label)
-            progress_layout_vertical.addWidget(self.slider_value_label)
+            slider_line_layout.addWidget(self.slider_value_label)
+
+            slider_line_widget = QWidget()
+            slider_line_widget.setLayout(slider_line_layout)
+            slider_line_widget.setMaximumSize(1000, 30)
+            slider_line_widget.setMinimumSize(1000, 30)
+            progress_layout_vertical.addWidget(slider_line_widget)
 
 
             progress_line_layout = QHBoxLayout()
@@ -487,6 +504,10 @@ class MusicsWindow(QMainWindow):
             self.progress_slider.valueChanged.connect(self.slider_value_changed)
             self.progress_slider.setEnabled(False)
             progress_line_layout.addWidget(self.progress_slider)
+
+            self.slider_value_label.setMinimumSize(self.progress_slider.width(), 30)
+            self.move_slider_label(str(current_user_bpd_progress)+"%")
+
 
             progress_line_widget = QWidget()
             progress_line_widget.setLayout(progress_line_layout)
@@ -930,8 +951,8 @@ class MusicsWindow(QMainWindow):
         self.slider_value = value
         self.slider_value_label.setText(str(value)+"%")
     def move_slider_label(self, value):
-        value_number = strip(value.split('%')[0])
-        self.slider_value_label.move(QPoint(int(int(value_number) * (self.slider_value_label.width()/100) + 90), 14))
+        value_number = int(strip(value.split('%')[0]).flat[0])
+        self.slider_value_label.setContentsMargins(int((self.slider_value_label.width() * value_number)/100)-20, 13, 0, 0)
 
     def volume_slider_value_changed(self, value):
         self.music_thread.set_volume(value/100)
@@ -1235,7 +1256,8 @@ class MusicsWindow(QMainWindow):
             global is_in_building_dataset_phase
             if is_in_building_dataset_phase:
                 self.music_playing = False
-                self.emotion_thread.stop_emotions()
+                if self.emotion_thread != None:
+                    self.emotion_thread.stop_emotions()
                 self.is_rating_music = True
                 self.switch_layout()
             else:
@@ -1265,6 +1287,9 @@ class MusicsWindow(QMainWindow):
             return
 
         def convert_hour_to_minutes(time):
+            if math.isnan(time):
+                return
+
             hours, minutes, seconds = map(int, time.split(':'))
             hours_in_minutes = hours * 60
             total_minutes = hours_in_minutes + minutes
@@ -1298,7 +1323,7 @@ class MusicsWindow(QMainWindow):
         # Replacing missing values
         numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
                              'min_temp', 'max_temp', 'cloud_pct',
-                             'humidity', 'wind_speed', 'precipitaProb']
+                             'humidity', 'wind_speed', 'precipitaProb', 'listenedAt', 'sunrise', 'sunset', 'day_length']
         imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
         imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
         filtered_df[numerical_columns] = imputer.transform(
@@ -1351,7 +1376,7 @@ class MusicsWindow(QMainWindow):
         #TODO - save as csv
         #TODO - train model - mostrar noutro ecrã
 
-        self.nextWindow = ApplicationHomeScreen()
+        self.nextWindow = TrainingModelScreen()
         self.nextWindow.show()
         self.close()
 
@@ -1438,7 +1463,6 @@ class EmotionsThread(QThread):
         last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]  # TODO - dá erro quando nunca se apanha uma emoção
         new_record['last_emotion'] = last_emotion
         new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions
-
 
     def append_emotion(self, dominant_emotion, time, percentages):
         global current_music_emotions
@@ -1967,6 +1991,72 @@ class ApplicationHomeScreen(QMainWindow):
             new_record['music_name'] = music_name
             self.nextWindow.show()
             self.close()
+
+
+class TrainingModelScreen(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("FeelTuneAI")
+        self.setMouseTracking(True)
+        self.setMinimumSize(QSize(1200, 750))
+
+        # Base Layout
+        base_layout = QVBoxLayout()
+        base_layout.setContentsMargins(10, 20, 10, 10)
+        base_layout.setSpacing(0)
+
+        # Title Layout
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(0, 0, 0, 0)
+
+        logo = QLabel()
+        logo.setPixmap(QPixmap('./images/feeltuneAI_logo.png'))
+        logo.setScaledContents(True)
+        logo.setMaximumSize(70, 70)
+        title_layout.addWidget(logo)
+
+        feeltune_ai_label = QLabel('FeelTune AI')
+        feeltune_ai_font = feeltune_ai_label.font()
+        feeltune_ai_font.setPixelSize(30)
+        feeltune_ai_label.setFont(feeltune_ai_font)
+        feeltune_ai_label.setMinimumSize(960, 80)
+        title_layout.addWidget(feeltune_ai_label)
+
+        title_widget = QWidget()
+        title_widget.setLayout(title_layout)
+        title_widget.setMaximumSize(2000, 60)
+        base_layout.addWidget(title_widget)
+
+        # Blank space one
+        blank_space_one = QLabel()
+        blank_space_one.setMaximumSize(10, 800)
+        base_layout.addWidget(blank_space_one)
+
+        # Wait message
+        wait_layout = QHBoxLayout()
+        wait_layout.setContentsMargins(0, 0, 0, 0)
+        wait_layout.setAlignment(Qt.AlignHCenter)
+
+        wait_label = QLabel("Wait a bit,\nwe're building your model")
+        wait_font = wait_label.font()
+        wait_font.setPointSize(20)
+        wait_label.setFont(wait_font)
+        wait_layout.addWidget(wait_label)
+
+        wait_widget = QWidget()
+        wait_widget.setLayout(wait_layout)
+        wait_widget.setMaximumSize(2000, 60)
+        base_layout.addWidget(wait_widget)
+
+        # Blank space three
+        blank_space_three = QLabel()
+        blank_space_three.setMaximumSize(10, 800)
+        base_layout.addWidget(blank_space_three)
+
+        base_widget = Color('#f5e6d0')
+        base_widget.setLayout(base_layout)
+        self.setCentralWidget(base_widget)
 
 def main():
     # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
