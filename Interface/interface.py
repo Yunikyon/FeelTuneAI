@@ -1287,9 +1287,11 @@ class MusicsWindow(QMainWindow):
             return
 
         def convert_hour_to_minutes(time):
-            if math.isnan(time):
+            if time is None or time == '':
                 return
-
+            time = str(time)
+            if time == 'nan':
+                return
             hours, minutes, seconds = map(int, time.split(':'))
             hours_in_minutes = hours * 60
             total_minutes = hours_in_minutes + minutes
@@ -1299,6 +1301,9 @@ class MusicsWindow(QMainWindow):
         #     min_value = 0
         #     max_value = 1440
         #     return (value - min_value) / (max_value - min_value)
+
+        mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+        mode_imputer = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
 
         def min_max_normalization(value, min, max):
             return (value - min) / (max - min)
@@ -1310,23 +1315,27 @@ class MusicsWindow(QMainWindow):
         # filtered_df[hours_columns] = hours_scaler.fit_transform(filtered_df[hours_columns])
         for column in hours_columns:
             filtered_df[column] = filtered_df[column].apply(convert_hour_to_minutes)
+            filtered_df[column] = mean_imputer.fit_transform(filtered_df[column].array.reshape(-1, 1))
             min_value = 0 # filtered_df[column].min()
             max_value = 1440 # filtered_df[column].max()
             filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value) # filtered_df[column].apply(normalize_value_hour) #
 
         # --- Columns: initial_emotion, last_emotion, rated_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
         # One Hot Encoding for categorical variables
-        filtered_df = pd.get_dummies(filtered_df, columns=['initial_emotion', 'last_emotion',
-                                                           'rated_emotion', 'idWeatherType',
-                                                           'classWindSpeed', 'classPrecInt', 'timeOfDay'])
+        categorical_columns = ['initial_emotion', 'last_emotion',
+                                'rated_emotion', 'idWeatherType',
+                                'classWindSpeed', 'classPrecInt', 'timeOfDay', 'isWorkDay']
+        mode_imputer.fit(filtered_df[categorical_columns])
+        filtered_df[categorical_columns] = mode_imputer.transform(filtered_df[categorical_columns])
+        categorical_columns.remove('isWorkDay') # isWorkDay is already binary
+        filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
 
         # Replacing missing values
         numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
                              'min_temp', 'max_temp', 'cloud_pct',
-                             'humidity', 'wind_speed', 'precipitaProb', 'listenedAt', 'sunrise', 'sunset', 'day_length']
-        imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
-        imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
-        filtered_df[numerical_columns] = imputer.transform(
+                             'humidity', 'wind_speed', 'precipitaProb']
+        mean_imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
+        filtered_df[numerical_columns] = mean_imputer.transform(
             filtered_df[numerical_columns])  # replaces the missing values with the mean
 
         # def normalize_temperature(value):
