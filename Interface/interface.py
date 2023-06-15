@@ -1266,21 +1266,23 @@ class MusicsWindow(QMainWindow):
     def new_emotion(self, result):
         print(result)
 
-    def finished_btn_clicked(self):
-        global current_user_name
-        global is_in_building_dataset_phase
-        is_in_building_dataset_phase = False
+    def merge_musics_va_to_dataset(self, dataset):
+        with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
+            musics_df = pd.read_csv(file_obj)
 
-        self.save_bdp_progress_to_csv()
-        self.save_user_progress()
+        dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
+        return dataset
 
+    def normalize_and_save_bdp_dataset(self):
         with open('../dataset_for_model_training.csv', 'r') as file_obj:
 
             df = pd.read_csv(file_obj)
-            filtered_df = pd.DataFrame(df)
+            filtered_df = pd.DataFrame(df) # So that we don't change the original df (and filtered_df can't be a view)
             # filtered_df = filtered_df[filtered_df['username'] == current_user_name]
 
         filtered_df = filtered_df.drop(labels=['username'], axis=1)
+        filtered_df = self.merge_musics_va_to_dataset(filtered_df)
+        filtered_df = filtered_df.drop(labels=['music_name'], axis=1)
         if filtered_df is None:
             #TODO - mostrar erro
             return
@@ -1381,8 +1383,17 @@ class MusicsWindow(QMainWindow):
         # --- Column: isWorkDay ---
         filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
 
-        #TODO - save as csv
         filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
+
+    def finished_btn_clicked(self):
+        global current_user_name
+        global is_in_building_dataset_phase
+        is_in_building_dataset_phase = False
+
+        self.save_bdp_progress_to_csv()
+        self.save_user_progress()
+        self.normalize_and_save_bdp_dataset()
+
         #TODO - train model - mostrar noutro ecrã
 
         self.nextWindow = TrainingModelScreen()
