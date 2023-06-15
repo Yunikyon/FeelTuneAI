@@ -1382,6 +1382,7 @@ class MusicsWindow(QMainWindow):
         filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
 
         #TODO - save as csv
+        filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
         #TODO - train model - mostrar noutro ecrã
 
         self.nextWindow = TrainingModelScreen()
