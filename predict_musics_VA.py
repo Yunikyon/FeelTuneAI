@@ -14,49 +14,49 @@ def predict_music_directory_emotions(directory, csv_name):
     # Extract Common features using librosa
     # Mel-frequency cepstral coefficients (MFCCs)
     mfcc = np.array([librosa.feature.mfcc(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100) for file in
-                     files])
+                     files], dtype=object)
     print("Mfcc done!")
     # Spectral centroid
     cent = np.array(
         [librosa.feature.spectral_centroid(y=librosa.load(directory + '/' + file, duration=150)[0]) for file in
-         files])
+         files], dtype=object)
     print("cent done!")
     # Zero-crossing rate
     zcr = np.array(
         [librosa.feature.zero_crossing_rate(y=librosa.load(directory + '/' + file, duration=150)[0]) for file in
-         files])
+         files], dtype=object)
     print("zcr done!")
 
     # Extract Valence features using librosa
     # Chroma features
     chroma_cqt = np.array(
         [librosa.feature.chroma_cqt(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100) for file in
-         files])
+         files], dtype=object)
     print("Chroma_cqt done!")
     chroma_stft = np.array(
         [librosa.feature.chroma_stft(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100) for file in
-         files])
+         files], dtype=object)
     print("chroma_stft done!")
     chroma_cens = np.array(
         [librosa.feature.chroma_cens(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100) for file in
-         files])
+         files], dtype=object)
     print("chroma_cens done!")
     # Spectral rolloff
     rolloff = np.array(
         [librosa.feature.spectral_rolloff(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100) for file in
-         files])
+         files], dtype=object)
     print("rolloff done!")
     # rms
     rms = np.array(
         [librosa.feature.rms(y=librosa.load(directory + '/' + file, duration=150)[0]) for file in
-         files])
+         files], dtype=object)
     print("rms done!")
 
     # Extract Arousal features using librosa
     # Spectral contrast
     spectral_contrast = np.array(
         [librosa.feature.spectral_contrast(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100) for file
-         in files])
+         in files], dtype=object)
     print("Spectral_contrast done!")
 
     # Convert the features to NumPy arrays with the same shape
