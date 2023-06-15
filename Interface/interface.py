@@ -9,7 +9,12 @@ from time import sleep
 
 import cv2
 import librosa
+import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 from mutagen.mp3 import MP3
 
 import context.main as contextMain
@@ -1140,9 +1145,9 @@ class MusicsWindow(QMainWindow):
         musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
         self.switch_layout()
-        current_time = datetime.now().strftime("%H:%M:%S")  # gets record data
+        current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
 
-        new_dict = {'username': current_user_name, 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
+        new_dict = {'username': current_user_name.lower(), 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
                     'music_name': new_record['music_name'],
                     'last_emotion': new_record['last_emotion'],
                     'rated_emotion': emotion,
@@ -1249,18 +1254,102 @@ class MusicsWindow(QMainWindow):
         self.save_user_progress()
 
         with open('../dataset_for_model_training.csv', 'r') as file_obj:
-            reader_obj = csv.reader(file_obj)
-
-            # Skips the heading using next() method
-            next(file_obj)
 
             df = pd.read_csv(file_obj)
-            filtered_df = df[df['username'] == current_user_name]
-            filtered_df.drop(labels=['username'], axis=1, inplace=True)
+            filtered_df = pd.DataFrame(df)
+            # filtered_df = filtered_df[filtered_df['username'] == current_user_name]
 
-            # for row in reader_obj:
-            #     dataset = {''}
+        filtered_df = filtered_df.drop(labels=['username'], axis=1)
+        if filtered_df is None:
+            #TODO - mostrar erro
+            return
 
+        def convert_hour_to_minutes(time):
+            hours, minutes, seconds = map(int, time.split(':'))
+            hours_in_minutes = hours * 60
+            total_minutes = hours_in_minutes + minutes
+            return total_minutes
+
+        # def normalize_value_hour(value):
+        #     min_value = 0
+        #     max_value = 1440
+        #     return (value - min_value) / (max_value - min_value)
+
+        def min_max_normalization(value, min, max):
+            return (value - min) / (max - min)
+
+        # --------------- Create a new normalized dataframe for model training ---------------
+        # --- Columns: listenedAt, sunset, sunrise ---
+        hours_columns = ['listenedAt', 'sunset', 'sunrise', 'day_length']
+        # hours_scaler = MinMaxScaler(feature_range=(0, 1))
+        # filtered_df[hours_columns] = hours_scaler.fit_transform(filtered_df[hours_columns])
+        for column in hours_columns:
+            filtered_df[column] = filtered_df[column].apply(convert_hour_to_minutes)
+            min_value = 0 # filtered_df[column].min()
+            max_value = 1440 # filtered_df[column].max()
+            filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value) # filtered_df[column].apply(normalize_value_hour) #
+
+        # --- Columns: initial_emotion, last_emotion, rated_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
+        # One Hot Encoding for categorical variables
+        filtered_df = pd.get_dummies(filtered_df, columns=['initial_emotion', 'last_emotion',
+                                                           'rated_emotion', 'idWeatherType',
+                                                           'classWindSpeed', 'classPrecInt', 'timeOfDay'])
+
+        # Replacing missing values
+        numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
+                             'min_temp', 'max_temp', 'cloud_pct',
+                             'humidity', 'wind_speed', 'precipitaProb']
+        imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+        imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
+        filtered_df[numerical_columns] = imputer.transform(
+            filtered_df[numerical_columns])  # replaces the missing values with the mean
+
+        # def normalize_temperature(value):
+        #     min_value = -20
+        #     max_value = 50
+        #     return (value - min_value) / (max_value - min_value)
+
+        # --- Columns: tMin, tMax, temp, feels_like, min_temp, max_temp ---
+        temperature_columns = ['tMin', 'tMax', 'temp', 'feels_like', 'min_temp', 'max_temp']
+        for column in temperature_columns:
+            min_value = -20 # filtered_df[column].min()
+            max_value = 50 # filtered_df[column].max()
+            # filtered_df[column] = filtered_df[column].apply(normalize_temperature)
+            filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
+        # temp_scaler = MinMaxScaler(feature_range=(0, 1))
+        # filtered_df[temperature_columns] = temp_scaler.fit_transform(filtered_df[temperature_columns])
+
+        # def normalize_probability(value):
+        #     min_value = 0
+        #     max_value = 100
+        #     return (value - min_value) / (max_value - min_value)
+
+        from_0_to_100_values = ['cloud_pct', 'precipitaProb', 'humidity']
+        for column in from_0_to_100_values:
+            min_value = 0
+            max_value = 100
+            filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
+            # filtered_df[column] = filtered_df[column].apply(normalize_probability)
+
+        # percentage_scaler = MinMaxScaler(feature_range=(0, 1))
+        # filtered_df[from_0_to_100_values] = percentage_scaler.fit_transform(filtered_df[from_0_to_100_values])
+
+        # --- Column: wind_speed ---
+        # wind_speed_scaler = MinMaxScaler(feature_range=(0, 1))
+        # filtered_df['wind_speed'] = wind_speed_scaler.fit_transform(filtered_df[['wind_speed']])
+
+        for index, row in filtered_df.iterrows():
+            filtered_df.at[index, 'wind_speed'] = min_max_normalization(row['wind_speed'], 0, 75)
+
+        # Apply scaler
+        # scaler = StandardScaler()
+        # filtered_df[numerical_columns] = scaler.fit_transform(filtered_df[numerical_columns])
+
+        # --- Column: isWorkDay ---
+        filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
+
+        #TODO - save as csv
+        #TODO - train model - mostrar noutro ecrã
 
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
