@@ -460,7 +460,8 @@ class MusicsWindow(QMainWindow):
             self.slider_value_label.setFont(slider_font)
 
             self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
-            self.slider_value_label.setMaximumSize(800, 30)
+            self.slider_value_label.setMaximumSize(800, 50)
+            self.slider_value_label.setMinimumSize(50, 50)
 
             self.slider_value_label.textChanged.connect(self.move_slider_label)
             slider_line_layout.addWidget(self.slider_value_label)
@@ -481,6 +482,7 @@ class MusicsWindow(QMainWindow):
             progress_font.setPointSize(15)
             progress_label.setFont(progress_font)
             progress_label.setMaximumSize(100, 60)
+            progress_label.setMinimumSize(100, 60)
             progress_line_layout.addWidget(progress_label)
 
 
@@ -503,11 +505,9 @@ class MusicsWindow(QMainWindow):
             self.progress_slider.setEnabled(False)
             progress_line_layout.addWidget(self.progress_slider)
 
-            self.slider_value_label.setMinimumSize(self.progress_slider.width(), 30)
+            self.slider_value_label.setMinimumSize(self.progress_slider.width()+100, 30)
 
-            self.slider_value_label.setContentsMargins(int((self.slider_value_label.width() * current_user_bpd_progress) / 100)+40,
-                                                       13, 0, 0)
-
+            self.slider_value_label.setContentsMargins(int(current_user_bpd_progress * 7.7), 10, 0, 0)
 
             progress_line_widget = QWidget()
             progress_line_widget.setLayout(progress_line_layout)
@@ -1468,6 +1468,9 @@ class EmotionsThread(QThread):
         global new_record
 
         self.emotions_running = False
+        if len(current_music_emotions) == 0:
+            return
+
         last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]  # TODO - dá erro quando nunca se apanha uma emoção
         new_record['last_emotion'] = last_emotion
         new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions

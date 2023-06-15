@@ -142,7 +142,7 @@ def predict_music_directory_emotions(directory, csv_name):
     # Write to csv
     with open(f'{csv_name}.csv', 'w+', newline='', encoding="utf-8") as csv_file:
         writer = csv.writer(csv_file)
-        header_row = ['music_name', 'valence', 'arousal']
+        header_row = ['music_name', 'music_valence', 'music_arousal']
 
         writer.writerow(header_row)
 
