@@ -141,14 +141,15 @@ def predict_music_directory_emotions(directory, csv_name):
 
     # Write to csv
     with open(f'{csv_name}.csv', 'w+', newline='', encoding="utf-8") as csv_file:
-        writer = csv.writer(csv_file)
         header_row = ['music_name', 'music_valence', 'music_arousal']
-
-        writer.writerow(header_row)
+        delimiter = '~~~'
+        h = delimiter.join(header_row)
+        csv_file.write(h + '\n')
 
         i = 0
         for music in files:
-            writer.writerow([music, round(valence[i], 3), round(arousal[i], 3)])
+            l = delimiter.join([music, str(round(valence[i], 3)), str(round(arousal[i], 3))])
+            csv_file.write(l + '\n')
             i += 1
 
 def predict_uploaded_music_emotions(directory, file, csv_name):
@@ -271,8 +272,9 @@ def predict_uploaded_music_emotions(directory, file, csv_name):
 
     # Write to csv
     with open(f'{csv_name}.csv', 'a', newline='', encoding="utf-8") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow([file, round(valence[0], 3), round(arousal[0], 3)])
+        delimiter = '~~~'
+        l = delimiter.join([file, str(round(valence[0], 3)), str(round(arousal[0], 3))])
+        csv_file.write(l + '\n')
 
 
 # predict_uploaded_music_emotions('./BuildingDatasetPhaseMusics', 'Avril Lavigne - Girlfriend (Official Video).mp3', 'building_dataset_phase_musics_va')

@@ -1267,10 +1267,55 @@ class MusicsWindow(QMainWindow):
         print(result)
 
     def merge_musics_va_to_dataset(self, dataset):
+        delimiter = '~~~'
         with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
-            musics_df = pd.read_csv(file_obj)
-
+            try:
+                musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
+            except pd.errors.ParserError:
+                musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
         dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
+        return dataset
+
+    def convert_emotions_to_va_values(self, emotion):
+        #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad
+        percentages = emotion.split('|')[1]
+        angry, disgust, fear, happy, sad, surprise, neutral = percentages.split('-')
+        angry, disgust, fear, happy, sad, surprise, neutral = float(angry), float(disgust), float(fear), float(happy), float(sad), float(surprise), float(neutral)
+        high = 0.84
+        medium = 0.5
+        low = 0.16
+        valence_sum = surprise * medium + neutral * medium + sad * low + happy * high + fear * low + disgust * low + angry * low
+        arousal_sum = surprise * high + neutral * medium + sad * medium + happy * medium + fear * high + disgust * medium + angry * high
+
+        # --- Convert to range [-1, 1] from [0, 100] ---
+        # Define the input range
+        input_min = 0
+        input_max = 100
+
+        # Define the new range
+        new_min = -1
+        new_max = 1
+        conversion_factor = (new_max - new_min) / (input_max - input_min)
+        offset = new_min - input_min * conversion_factor
+
+        # Apply the conversion to the value
+
+        valence_sum = valence_sum * conversion_factor + offset
+        arousal_sum = arousal_sum * conversion_factor + offset
+
+        # valence_sum = (valence_sum + 1) / 200
+        # arousal_sum = (arousal_sum + 1) / 200
+
+        return valence_sum, arousal_sum
+
+    def add_va_columns_from_emotions(self, dataset):
+        for index, row in dataset.iterrows():
+            #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
+            emotions = row['instant_seconds|percentages|dominant_emotion']
+            first_emotion = emotions.split(';')[0]
+            last_emotion = emotions.split(';')[-2]
+            dataset.at[index, 'valence_initial_emotion'], dataset.at[index, 'arousal_initial_emotion'] = self.convert_emotions_to_va_values(first_emotion)
+            dataset.at[index, 'valence_last_emotion'], dataset.at[index, 'arousal_last_emotion'] = self.convert_emotions_to_va_values(last_emotion)
         return dataset
 
     def normalize_and_save_bdp_dataset(self):
@@ -1382,6 +1427,9 @@ class MusicsWindow(QMainWindow):
 
         # --- Column: isWorkDay ---
         filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
+
+        filtered_df = self.add_va_columns_from_emotions(filtered_df)
+        filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
 
         filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
 
