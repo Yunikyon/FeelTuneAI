@@ -612,8 +612,8 @@ class MusicsWindow(QMainWindow):
         quit_button_font = quit_button.font()
         quit_button_font.setPointSize(10)
         quit_button.setFont(quit_button_font)
-        quit_button.setMaximumSize(135, 60)
-        quit_button.setMinimumSize(135, 60)
+        quit_button.setMaximumSize(120, 60)
+        quit_button.setMinimumSize(120, 60)
         quit_button.setIcon(QIcon("./images/quit_btn.png"))
         quit_button.setIconSize(QSize(35, 35))
         quit_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -626,8 +626,8 @@ class MusicsWindow(QMainWindow):
         sign_out_button_font = sign_out_button.font()
         sign_out_button_font.setPointSize(10)
         sign_out_button.setFont(sign_out_button_font)
-        sign_out_button.setMaximumSize(145, 60)
-        sign_out_button.setMinimumSize(145, 60)
+        sign_out_button.setMaximumSize(120, 60)
+        sign_out_button.setMinimumSize(120, 60)
         sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
         sign_out_button.setIconSize(QSize(25, 25))
         sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -641,8 +641,7 @@ class MusicsWindow(QMainWindow):
         buttons_left_widget.setMaximumSize(4000, 60)
         buttons_layout.addWidget(buttons_left_widget)
 
-
-        # buttons_layout.addWidget(quit_button)
+        # Music play or pause button
         buttons_right_layout = QHBoxLayout()
         buttons_right_layout.setContentsMargins(0, 0, 0, 0)
         buttons_right_layout.setAlignment(Qt.AlignHCenter)
@@ -1515,6 +1514,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         self.setWindowTitle("FeelTuneAI")
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
+        self.nextWindow = None
 
         global current_user_bpd_progress
 
@@ -1563,7 +1563,8 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
         welcome_widget = QWidget()
         welcome_widget.setLayout(welcome_layout)
-        welcome_widget.setMaximumSize(2000, 60)
+        welcome_widget.setMaximumSize(2000, 80)
+        welcome_widget.setMinimumSize(400, 80)
         base_layout.addWidget(welcome_widget)
 
         # BDP title
@@ -1596,6 +1597,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         percentage_widget = QWidget()
         percentage_widget.setLayout(percentage_layout)
         percentage_widget.setMaximumSize(2000, 80)
+        percentage_widget.setMinimumSize(400, 80)
         base_layout.addWidget(percentage_widget)
 
         # Blank space two
@@ -1623,6 +1625,8 @@ class BuildingPhaseHomeScreen(QMainWindow):
         continue_widget.setMaximumSize(2000, 100)
         base_layout.addWidget(continue_widget)
 
+        base_layout.addWidget(blank_space_two)
+
         # Add music button
         add_music_layout = QHBoxLayout()
         add_music_layout.setAlignment(Qt.AlignHCenter)
@@ -1642,6 +1646,51 @@ class BuildingPhaseHomeScreen(QMainWindow):
         add_music_widget.setLayout(add_music_layout)
         add_music_widget.setMaximumSize(2000, 100)
         base_layout.addWidget(add_music_widget)
+
+        # Blank space three
+        blank_space_three = QLabel()
+        blank_space_three.setMinimumSize(10, 130)
+        base_layout.addWidget(blank_space_three)
+
+        # Buttons
+        buttons_left_layout = QHBoxLayout()
+        buttons_left_layout.setContentsMargins(50, 0, 50, 50)
+        buttons_left_layout.setSpacing(15)
+        buttons_left_layout.setAlignment(Qt.AlignLeft)
+
+        # Button Quit
+        quit_button = QPushButton("Quit")
+        quit_button_font = quit_button.font()
+        quit_button_font.setPointSize(10)
+        quit_button.setFont(quit_button_font)
+        quit_button.setMaximumSize(120, 60)
+        quit_button.setMinimumSize(120, 60)
+        quit_button.setIcon(QIcon("./images/quit_btn.png"))
+        quit_button.setIconSize(QSize(35, 35))
+        quit_button.setCursor(QCursor(Qt.PointingHandCursor))
+        quit_button.setStyleSheet("* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
+        quit_button.clicked.connect(self.quit_button_clicked)
+        buttons_left_layout.addWidget(quit_button)
+
+        # Button Sign Out
+        sign_out_button = QPushButton(" Sign Out")
+        sign_out_button_font = sign_out_button.font()
+        sign_out_button_font.setPointSize(10)
+        sign_out_button.setFont(sign_out_button_font)
+        sign_out_button.setMaximumSize(120, 60)
+        sign_out_button.setMinimumSize(120, 60)
+        sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
+        sign_out_button.setIconSize(QSize(25, 25))
+        sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
+        sign_out_button.setStyleSheet(
+            "* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
+        sign_out_button.clicked.connect(self.sign_out_button_clicked)
+        buttons_left_layout.addWidget(sign_out_button)
+
+        buttons_left_widget = QWidget()
+        buttons_left_widget.setLayout(buttons_left_layout)
+        buttons_left_widget.setMaximumSize(4000, 60)
+        base_layout.addWidget(buttons_left_widget)
 
         # Blank space three
         blank_space_three = QLabel()
@@ -1724,6 +1773,40 @@ class BuildingPhaseHomeScreen(QMainWindow):
                 QMessageBox.Ok,
             )
 
+    def confirm_warning(self, title, message):
+        reply = QMessageBox.warning(
+            self, title, message,
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        return reply
+
+    def quit_button_clicked(self):
+        reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+
+        if reply == QMessageBox.Yes:
+            quit(0)
+
+    def sign_out_button_clicked(self):
+        reply = self.confirm_warning("Confirm Sign Out", "You're about to sign out.\n Are you sure?")
+
+        if reply == QMessageBox.Yes:
+            global current_user_name
+            current_user_name = ''
+            global current_user_bpd_progress
+            current_user_bpd_progress = 0
+
+            # Switches to Login Window
+            self.nextWindow = LoginWindow()
+            self.nextWindow.show()
+            self.close()
+
+    def closeEvent(self, event):
+        if not ("LoginWindow" in str(self.nextWindow)) and not ("MusicsWindow" in str(self.nextWindow)):
+            reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+            if reply == QMessageBox.Yes:
+                quit(0)
+            else:
+                event.ignore()
 
 class QuadrantWidget(QWidget):
     def __init__(self):
@@ -2039,7 +2122,7 @@ class TrainingModelScreen(QMainWindow):
 
         # Blank space one
         blank_space_one = QLabel()
-        blank_space_one.setMaximumSize(10, 800)
+        blank_space_one.setMaximumSize(10, 200)
         base_layout.addWidget(blank_space_one)
 
         # Wait message
@@ -2047,7 +2130,8 @@ class TrainingModelScreen(QMainWindow):
         wait_layout.setContentsMargins(0, 0, 0, 0)
         wait_layout.setAlignment(Qt.AlignHCenter)
 
-        wait_label = QLabel("Wait a bit,\nwe're building your model")
+        wait_label = QLabel()
+        wait_label.setText("Wait a bit, we're trying to\n \u00A0\u00A0\u00A0\u00A0comprehend you :D")
         wait_font = wait_label.font()
         wait_font.setPointSize(20)
         wait_label.setFont(wait_font)
@@ -2055,8 +2139,26 @@ class TrainingModelScreen(QMainWindow):
 
         wait_widget = QWidget()
         wait_widget.setLayout(wait_layout)
-        wait_widget.setMaximumSize(2000, 60)
+        wait_widget.setMaximumSize(2000, 120)
+        wait_widget.setMinimumSize(600, 120)
         base_layout.addWidget(wait_widget)
+
+        # Spinner layout
+        spinner_layout = QHBoxLayout()
+        spinner_layout.setAlignment(Qt.AlignHCenter)
+        spinner_layout.setContentsMargins(0, 0, 0, 0)
+
+        spinner = QLabel()
+        movie = QMovie("./images/spinner.gif")
+        spinner.setMovie(movie)
+        spinner.setMaximumSize(450, 300)
+        spinner.setMinimumSize(450, 300)
+        movie.start()
+        spinner_layout.addWidget(spinner)
+
+        spinner_widget = QWidget()
+        spinner_widget.setLayout(spinner_layout)
+        base_layout.addWidget(spinner_widget)
 
         # Blank space three
         blank_space_three = QLabel()
@@ -2072,6 +2174,7 @@ def main():
     # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
     app = QApplication([])
     window = LoginWindow()
+    # window = TrainingModelScreen()
     # window = MusicsWindow()
     # window = ApplicationHomeScreen()
     window.show()
