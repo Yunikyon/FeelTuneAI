@@ -490,7 +490,7 @@ class MusicsWindow(QMainWindow):
             self.progress_slider.setMinimum(0)
             self.progress_slider.setValue(current_user_bpd_progress)
             self.progress_slider.setMaximum(100)
-            self.progress_slider.setSingleStep(round(100/self.music_files_length))
+            # self.progress_slider.setSingleStep(round(100/self.music_files_length))
             self.progress_slider.setMaximumSize(800, 40)
             self.progress_slider.setStyleSheet("QSlider::groove:horizontal "
                                           "{border: 1px solid #999999; height: 8px;"
@@ -1159,11 +1159,11 @@ class MusicsWindow(QMainWindow):
         global current_user_name
 
         self.setDisabled(True)
-        self.progress_slider.setValue(self.progress_slider.value() + self.progress_slider.singleStep())
         self.is_rating_music = False
         musics_listened_by_current_user.append(new_record['music_name'])
         musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
+        self.progress_slider.setValue(current_user_bpd_progress)
         self.switch_layout()
         current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
 
