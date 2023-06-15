@@ -328,8 +328,6 @@ class MusicsWindow(QMainWindow):
         global is_in_building_dataset_phase
         global current_user_bpd_progress
 
-        self.slider_value = 10
-        self.slider_value_initial_position = 0
         self.music_playing = False
         self.is_rating_music = False
 
@@ -506,7 +504,9 @@ class MusicsWindow(QMainWindow):
             progress_line_layout.addWidget(self.progress_slider)
 
             self.slider_value_label.setMinimumSize(self.progress_slider.width(), 30)
-            self.move_slider_label(str(current_user_bpd_progress)+"%")
+
+            self.slider_value_label.setContentsMargins(int((self.slider_value_label.width() * current_user_bpd_progress) / 100)+40,
+                                                       13, 0, 0)
 
 
             progress_line_widget = QWidget()
@@ -1092,7 +1092,7 @@ class MusicsWindow(QMainWindow):
             self.close()
 
     def closeEvent(self, event):
-        if not ("LoginWindow" in str(self.nextWindow)) and not ("ApplicationHomeScreen" in str(self.nextWindow)):
+        if not ("LoginWindow" in str(self.nextWindow)) and not ("ApplicationHomeScreen" in str(self.nextWindow)) and not ("TrainingModelScreen" in str(self.nextWindow)):
             reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
             if reply == QMessageBox.Yes:
                 self.stop_threads()
