@@ -9,14 +9,19 @@ from threading import Event
 from time import sleep
 
 import cv2
+import joblib
 import librosa
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 from mutagen.mp3 import MP3
+from sklearn.svm import NuSVR
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -1274,6 +1279,11 @@ class MusicsWindow(QMainWindow):
             except pd.errors.ParserError:
                 musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
         dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
+
+        for index,row in dataset.iterrows():
+            dataset.at[index, 'music_valence'] = self.convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_valence'])
+            dataset.at[index, 'music_arousal'] = self.convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_arousal'])
+
         return dataset
 
     def convert_emotions_to_va_values(self, emotion):
@@ -1287,26 +1297,20 @@ class MusicsWindow(QMainWindow):
         valence_sum = surprise * medium + neutral * medium + sad * low + happy * high + fear * low + disgust * low + angry * low
         arousal_sum = surprise * high + neutral * medium + sad * medium + happy * medium + fear * high + disgust * medium + angry * high
 
-        # --- Convert to range [-1, 1] from [0, 100] ---
-        # Define the input range
-        input_min = 0
-        input_max = 100
+        # Apply the conversion to the value
+        valence_sum = self.convert_to_new_range(0, 100, 0, 1, valence_sum)
+        arousal_sum = self.convert_to_new_range(0, 100, 0, 1, arousal_sum)
 
-        # Define the new range
-        new_min = -1
-        new_max = 1
+        return valence_sum, arousal_sum
+
+    def convert_to_new_range(self, input_min, input_max, new_min, new_max, value_to_convert):
+        # --- Convert to range [-1, 1] from [0, 100] ---
         conversion_factor = (new_max - new_min) / (input_max - input_min)
         offset = new_min - input_min * conversion_factor
 
-        # Apply the conversion to the value
+        value_converted = value_to_convert * conversion_factor + offset
 
-        valence_sum = valence_sum * conversion_factor + offset
-        arousal_sum = arousal_sum * conversion_factor + offset
-
-        # valence_sum = (valence_sum + 1) / 200
-        # arousal_sum = (arousal_sum + 1) / 200
-
-        return valence_sum, arousal_sum
+        return value_converted
 
     def add_va_columns_from_emotions(self, dataset):
         for index, row in dataset.iterrows():
@@ -1442,11 +1446,10 @@ class MusicsWindow(QMainWindow):
         self.save_user_progress()
         self.normalize_and_save_bdp_dataset()
 
-        #TODO - train model - mostrar noutro ecrã
-
         self.nextWindow = TrainingModelScreen()
         self.nextWindow.show()
         self.close()
+        self.nextWindow.train_model()
 
 
 class MusicThread(QThread):
@@ -2231,6 +2234,47 @@ class TrainingModelScreen(QMainWindow):
         base_widget = Color('#f5e6d0')
         base_widget.setLayout(base_layout)
         self.setCentralWidget(base_widget)
+
+
+    def convert_to_new_range(self, input_min, input_max, new_min, new_max, value_to_convert):
+        # --- Convert to range [-1, 1] from [0, 100] ---
+        conversion_factor = (new_max - new_min) / (input_max - input_min)
+        offset = new_min - input_min * conversion_factor
+
+        value_converted = value_to_convert * conversion_factor + offset
+
+        return value_converted
+
+    def train_model(self):
+        global current_user_name
+        with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
+            dataset = pd.read_csv(file)
+
+            # Labels
+            y = dataset[['music_valence', 'music_arousal']]
+            # Get context
+            X = dataset.drop(labels=['music_valence', 'music_arousal'], axis=1)
+
+            print("Train and test split...")
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+            print("Training...")
+            mlp = MLPRegressor(hidden_layer_sizes=(100, 100), activation='logistic', random_state=42, learning_rate_init=0.1)
+            mlp.fit(X_train, y_train)
+
+            y_pred = mlp.predict(X_test)
+            mse = mean_squared_error(y_test, y_pred)
+
+            print("Mean Squared Error:", mse)
+
+            print("Valence")
+            print(y_pred[0])
+            print("Arousal")
+            print(y_pred[1])
+
+            # Save model
+            model_file = f"../MusicPredictModels/{current_user_name}_music_predict.pkl"
+            joblib.dump(mlp, model_file)
 
 def main():
     # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
