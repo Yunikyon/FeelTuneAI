@@ -339,6 +339,7 @@ class MusicsWindow(QMainWindow):
 
         global is_in_building_dataset_phase
         global current_user_bpd_progress
+        global current_user_name
 
         self.music_playing = False
         self.is_rating_music = False
@@ -350,14 +351,11 @@ class MusicsWindow(QMainWindow):
         # Music Thread Initialization
         if is_in_building_dataset_phase:
             musics_directory = '../BuildingDatasetPhaseMusics'
-            # music_name = 'Käärijä - Cha Cha Cha _ Finland 🇫🇮 _ Official Music Video _ Eurovision 2023.mp3'
-            # music_name = 'Mahmood - Soldi - Italy 🇮🇹 - Official Music Video - Eurovision 2019.mp3'
         else:
             musics_directory = '../ApplicationMusics'
             #TODO - é recolher contexto, emoção atual da pessoa,
             # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
 
-            music_name = 'Shawn Mendes, Camila Cabello - Señorita.mp3'
         self.music_thread = MusicThread(musics_directory)
         self.music_thread.set_music("NA")
         self.music_thread.finished_music_signal.connect(self.music_finished)
@@ -432,6 +430,9 @@ class MusicsWindow(QMainWindow):
         # Read training musics
         if is_in_building_dataset_phase:
             self.music_files = os.listdir('../BuildingDatasetPhaseMusics')
+            if os.path.exists(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'):
+                personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics')
+                self.music_files.extend(personal_music_files)
             self.music_files_length = len(self.music_files)
             global music_files_bdp_length
             music_files_bdp_length = self.music_files_length
@@ -441,6 +442,9 @@ class MusicsWindow(QMainWindow):
                 exit()
         else:  # Read application musics
             self.music_files = os.listdir('../ApplicationMusics')
+            if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
+                personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/application_musics')
+                self.music_files.extend(personal_music_files)
             self.music_files_length = len(self.music_files)
 
             if self.music_files_length == 0:
@@ -1327,7 +1331,7 @@ class MusicsWindow(QMainWindow):
 
             df = pd.read_csv(file_obj)
             filtered_df = pd.DataFrame(df) # So that we don't change the original df (and filtered_df can't be a view)
-            # filtered_df = filtered_df[filtered_df['username'] == current_user_name]
+            # filtered_df = filtered_df[filtered_df['username'] == current_user_name] # TODO - remover essa linha
 
         filtered_df = filtered_df.drop(labels=['username'], axis=1)
         filtered_df = self.merge_musics_va_to_dataset(filtered_df)
@@ -1816,7 +1820,20 @@ class BuildingPhaseHomeScreen(QMainWindow):
             )
             return None
 
+    def check_if_music_was_already_classified_with_va(self, file_name):
+        #check in csv to see if music is already there
+        with open("../building_dataset_phase_musics_va.csv", "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            lines = list(reader)
+            for index, line in reversed(list(enumerate(lines, start=1))):
+                music = line[0].split("~~~")[0]
+                if music == file_name:
+                    return True
+        return False
+
     def add_music_button_clicked(self):
+        global current_user_name
+        global is_in_building_dataset_phase
         file = self.select_mp3_file()
         self.setDisabled(True)
 
@@ -1825,9 +1842,35 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
         # ---------- Uploads music ----------
         try:
-            folder_name = "../BuildingDatasetPhaseMusics"
+            first_upload = False
+            folder_name = f"../personalized_musics/{current_user_name}"
+            if not os.path.exists(folder_name):
+                os.makedirs(folder_name)
+            if is_in_building_dataset_phase:
+                folder_name = f"../personalized_musics/{current_user_name}/building_dataset_phase_musics"
+                if not os.path.exists(folder_name):
+                    os.makedirs(folder_name)
+                    first_upload = True
+            else:
+                folder_name = f"../personalized_musics/{current_user_name}/application_musics"
+                if not os.path.exists(folder_name):
+                    os.makedirs(folder_name)
+                    first_upload = True
+            if not first_upload:
+                file_name = file.split('/')[-1]
+                musics = os.listdir(folder_name)
+                for music in musics:
+                    if music == file_name:
+                        self.setDisabled(False)
+                        QMessageBox.information(
+                            self, "Success", "Music was previously uploaded!",
+                            QMessageBox.Ok,
+                        )
+                        return
             shutil.copy2(file, folder_name)
-            predict_uploaded_music_emotions(folder_name, file.split('/')[-1],'../building_dataset_phase_musics_va')
+            file_name = file.split('/')[-1]
+            if not self.check_if_music_was_already_classified_with_va(file_name):
+                predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va')
             self.setDisabled(False)
             QMessageBox.information(
                 self, "Success", "Music uploaded!",
