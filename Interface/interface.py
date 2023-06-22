@@ -11,11 +11,15 @@ import joblib
 import librosa
 import numpy as np
 import pandas as pd
+import tf as tf
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPRegressor
 from mutagen.mp3 import MP3
+from keras.models import Model
+from keras.layers import Input, Dense
+from keras.optimizers import SGD
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -2348,24 +2352,53 @@ class TrainingModelScreen(QMainWindow):
             print("Train and test split...")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-            print("Training...")
-            mlp = MLPRegressor(hidden_layer_sizes=(100, 100), activation='logistic', random_state=42, learning_rate_init=0.1)
-            # mlp = MLPRegressor(hidden_layer_sizes=(100), activation='logistic', random_state=42, learning_rate_init=0.1)
-            mlp.fit(X_train, y_train)
+            # Define the input shape
+            input_shape = (X_train.shape[1],)  # Replace num_features with the actual number of input features
 
-            y_pred = mlp.predict(X_test)
-            mse = mean_squared_error(y_test, y_pred)
+            # Define the inputs
+            inputs = Input(shape=input_shape)
 
-            print("Mean Squared Error:", mse)
+            # Define the hidden layer with one layer and 1 neuron
+            hidden_layer = Dense(1, activation='sigmoid')(inputs)
 
-            print("Valence")
-            print(y_pred[0])
-            print("Arousal")
-            print(y_pred[1])
+            # Define the output layer with 2 neurons for valence and arousal
+            outputs = Dense(2, activation='sigmoid')(hidden_layer)
+
+            # Create the model
+            model = Model(inputs=inputs, outputs=outputs)
+
+            # Compile the model with the desired learning rate
+            learning_rate = 0.1
+            optimizer = SGD(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
+
+            # Train the model
+            epochs = 100  # Adjust the number of epochs as needed
+            batch_size = 16  # Adjust the batch size as needed
+
+            history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size)
+
+            # Print the metric values for each epoch during training
+            for metric_name, metric_values in history.history.items():
+                print(metric_name + ":" + str(metric_values[-1]))
+
+            # Evaluate the model on the test data
+            evaluation_results = model.evaluate(X_test, y_test)
+
+            # Print the metric values during evaluation
+            for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
+                print(metric_name + ": " + str(metric_value))
+
+            # Make predictions on the test data
+            # predictions = model.predict(X_test)
+            #
+            # # Extract the predicted valence and arousal values
+            # predicted_valence = predictions[:, 0]
+            # predicted_arousal = predictions[:, 1]
 
             # Save model
             model_file = f"../MusicPredictModels/{current_user_name}_music_predict.pkl"
-            joblib.dump(mlp, model_file)
+            joblib.dump(model, model_file)
 
             global is_training_model
             is_training_model = False
