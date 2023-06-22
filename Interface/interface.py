@@ -353,8 +353,40 @@ class MusicsWindow(QMainWindow):
             musics_directory = '../BuildingDatasetPhaseMusics'
         else:
             musics_directory = '../ApplicationMusics'
-            #TODO - é recolher contexto, emoção atual da pessoa,
+
+        # --- Get music files and choose music
+        self.music_files = []
+        self.music_files_length = 0
+
+        self.music_files = os.listdir(musics_directory)
+
+        # Read training musics
+        if is_in_building_dataset_phase:
+            # Add personalized bdp user musics to base musics
+            if os.path.exists(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'):
+                personal_music_files = os.listdir(
+                    f'../personalized_musics/{current_user_name}/building_dataset_phase_musics')
+                self.music_files.extend(personal_music_files)
+
+            self.music_files_length = len(self.music_files)
+            global music_files_bdp_length
+            music_files_bdp_length = self.music_files_length
+
+            if self.music_files_length == 0:
+                print(f"{Bcolors.WARNING} BDP music files length is zero" + Bcolors.ENDC)
+                exit()
+        else:  # Read application musics
+
+            # TODO - é recolher contexto, emoção atual da pessoa,
             # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
+            if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
+                personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/application_musics')
+                self.music_files.extend(personal_music_files)
+            self.music_files_length = len(self.music_files)
+
+            if self.music_files_length == 0:
+                print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
+                exit()
 
         self.music_thread = MusicThread(musics_directory)
         self.music_thread.set_music("NA")
@@ -425,31 +457,6 @@ class MusicsWindow(QMainWindow):
         blank_space_one.setMaximumSize(10, 30)
         base_layout.addWidget(blank_space_one)
 
-        self.music_files = []
-        self.music_files_length = 0
-        # Read training musics
-        if is_in_building_dataset_phase:
-            self.music_files = os.listdir('../BuildingDatasetPhaseMusics')
-            if os.path.exists(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'):
-                personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics')
-                self.music_files.extend(personal_music_files)
-            self.music_files_length = len(self.music_files)
-            global music_files_bdp_length
-            music_files_bdp_length = self.music_files_length
-
-            if self.music_files_length == 0:
-                print(f"{Bcolors.WARNING} BDP music files length is zero" + Bcolors.ENDC)
-                exit()
-        else:  # Read application musics
-            self.music_files = os.listdir('../ApplicationMusics')
-            if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
-                personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/application_musics')
-                self.music_files.extend(personal_music_files)
-            self.music_files_length = len(self.music_files)
-
-            if self.music_files_length == 0:
-                print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
-                exit()
 
         if is_in_building_dataset_phase:
             # Training Progress Slider
@@ -1270,6 +1277,7 @@ class MusicsWindow(QMainWindow):
                 self.switch_layout()
             else:
                 self.emotion_thread.stop_emotions()
+                # TODO - ir mudando a diretoria se for personalized ou não
                 self.music_thread.start()
 
     def new_emotion(self, result):
@@ -1439,6 +1447,17 @@ class MusicsWindow(QMainWindow):
         filtered_df = self.add_va_columns_from_emotions(filtered_df)
         filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
 
+        numerical_columns.extend(['listenedAt','sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
+                                  'arousal_initial_emotion', 'valence_last_emotion', 'arousal_last_emotion',
+                                  'music_valence', 'music_arousal'])
+
+        # Discretize the numerical columns into categories
+        # num_bins = 7  # Number of bins or categories
+        # for col in numerical_columns:
+        #     filtered_df[col] = pd.cut(filtered_df[col], bins=num_bins, labels=False)
+
+        filtered_df[numerical_columns] = filtered_df[numerical_columns].round(3)
+
         filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
 
     def finished_btn_clicked(self):
@@ -1485,8 +1504,6 @@ class MusicThread(QThread):
     def set_music(self, music_name):
         self.music_name = music_name
 
-
-        
     def set_directory(self, directory):
         self.directory = directory
 
