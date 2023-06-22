@@ -2,10 +2,8 @@ import csv
 import math
 import os
 import shutil
-import threading
 import warnings
 from datetime import datetime
-from threading import Event
 from time import sleep
 
 import cv2
@@ -13,15 +11,11 @@ import joblib
 import librosa
 import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import MinMaxScaler
 from mutagen.mp3 import MP3
-from sklearn.svm import NuSVR
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -55,6 +49,7 @@ new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion
 
 goal_emotion = None
 
+is_training_model = False
 
 def reset_values(record):
     record['initial_emotion'] = ''
@@ -140,6 +135,14 @@ class CircleProgressWidget(QWidget):
 
     def resizeEvent(self, event):
         self.update()
+
+
+def confirm_warning(self, title, message):
+    reply = QMessageBox.warning(
+        self, title, message,
+        QMessageBox.Yes | QMessageBox.No,
+    )
+    return reply
 
 
 class LoginWindow(QMainWindow):
@@ -350,7 +353,7 @@ class MusicsWindow(QMainWindow):
             #TODO - é recolher contexto, emoção atual da pessoa,
             # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
 
-            music_name = 'Sad music 1 minute.mp3'
+            music_name = 'Shawn Mendes, Camila Cabello - Señorita.mp3'
         self.music_thread = MusicThread(musics_directory)
         self.music_thread.set_music("NA")
         self.music_thread.finished_music_signal.connect(self.music_finished)
@@ -465,8 +468,8 @@ class MusicsWindow(QMainWindow):
             self.slider_value_label.setFont(slider_font)
 
             self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
-            self.slider_value_label.setMaximumSize(800, 50)
-            self.slider_value_label.setMinimumSize(50, 50)
+            self.slider_value_label.setMaximumSize(810, 50)
+            self.slider_value_label.setMinimumSize(70, 50)
 
             self.slider_value_label.textChanged.connect(self.move_slider_label)
             slider_line_layout.addWidget(self.slider_value_label)
@@ -476,7 +479,6 @@ class MusicsWindow(QMainWindow):
             slider_line_widget.setMaximumSize(1000, 30)
             slider_line_widget.setMinimumSize(1000, 30)
             progress_layout_vertical.addWidget(slider_line_widget)
-
 
             progress_line_layout = QHBoxLayout()
             progress_line_layout.setContentsMargins(0, 0, 0, 0)
@@ -489,7 +491,6 @@ class MusicsWindow(QMainWindow):
             progress_label.setMaximumSize(100, 60)
             progress_label.setMinimumSize(100, 60)
             progress_line_layout.addWidget(progress_label)
-
 
             self.progress_slider = QSlider(Qt.Horizontal)
             self.progress_slider.setMinimum(0)
@@ -977,12 +978,7 @@ class MusicsWindow(QMainWindow):
             self.pause_button.setProperty("icon_name", "pause")
             self.pause_button.setIconSize(QSize(30, 30))
 
-    def confirm_warning(self, title, message):
-        reply = QMessageBox.warning(
-            self, title, message,
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        return reply
+
 
     def save_bdp_progress_to_csv(self):
         global current_user_name
@@ -1065,7 +1061,7 @@ class MusicsWindow(QMainWindow):
         self.save_bdp_progress_to_csv()
 
     def quit_button_clicked(self):
-        reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+        reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
             self.stop_threads()
@@ -1077,7 +1073,7 @@ class MusicsWindow(QMainWindow):
             quit(0)
 
     def sign_out_button_clicked(self):
-        reply = self.confirm_warning("Confirm Sign Out", "You're about to sign out.\n Are you sure?")
+        reply = confirm_warning(self, "Confirm Sign Out", "You're about to sign out.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
             self.stop_threads()
@@ -1098,7 +1094,7 @@ class MusicsWindow(QMainWindow):
 
     def closeEvent(self, event):
         if not ("LoginWindow" in str(self.nextWindow)) and not ("ApplicationHomeScreen" in str(self.nextWindow)) and not ("TrainingModelScreen" in str(self.nextWindow)):
-            reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+            reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
             if reply == QMessageBox.Yes:
                 self.stop_threads()
 
@@ -1441,6 +1437,8 @@ class MusicsWindow(QMainWindow):
         global current_user_name
         global is_in_building_dataset_phase
         is_in_building_dataset_phase = False
+        global is_training_model
+        is_training_model = True
 
         self.save_bdp_progress_to_csv()
         self.save_user_progress()
@@ -1839,21 +1837,14 @@ class BuildingPhaseHomeScreen(QMainWindow):
                 QMessageBox.Ok,
             )
 
-    def confirm_warning(self, title, message):
-        reply = QMessageBox.warning(
-            self, title, message,
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        return reply
-
     def quit_button_clicked(self):
-        reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+        reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
             quit(0)
 
     def sign_out_button_clicked(self):
-        reply = self.confirm_warning("Confirm Sign Out", "You're about to sign out.\n Are you sure?")
+        reply = confirm_warning(self, "Confirm Sign Out", "You're about to sign out.\n Are you sure?")
 
         if reply == QMessageBox.Yes:
             global current_user_name
@@ -1868,7 +1859,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
     def closeEvent(self, event):
         if not ("LoginWindow" in str(self.nextWindow)) and not ("MusicsWindow" in str(self.nextWindow)):
-            reply = self.confirm_warning("Confirm Exit", "You're about to leave the application.\n Are you sure?")
+            reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
             if reply == QMessageBox.Yes:
                 quit(0)
             else:
@@ -2159,6 +2150,8 @@ class TrainingModelScreen(QMainWindow):
         self.setMouseTracking(True)
         self.setMinimumSize(QSize(1200, 750))
 
+        self.nextWindow = None
+
         # Base Layout
         base_layout = QVBoxLayout()
         base_layout.setContentsMargins(10, 20, 10, 10)
@@ -2186,10 +2179,16 @@ class TrainingModelScreen(QMainWindow):
         title_widget.setMaximumSize(2000, 60)
         base_layout.addWidget(title_widget)
 
+        self.stacked_widget = QStackedWidget()
+
+        # --- Training Model widget
+        training_model_layout = QVBoxLayout()
+        training_model_layout.setAlignment(Qt.AlignHCenter)
+
         # Blank space one
         blank_space_one = QLabel()
         blank_space_one.setMaximumSize(10, 200)
-        base_layout.addWidget(blank_space_one)
+        training_model_layout.addWidget(blank_space_one)
 
         # Wait message
         wait_layout = QHBoxLayout()
@@ -2207,7 +2206,7 @@ class TrainingModelScreen(QMainWindow):
         wait_widget.setLayout(wait_layout)
         wait_widget.setMaximumSize(2000, 120)
         wait_widget.setMinimumSize(600, 120)
-        base_layout.addWidget(wait_widget)
+        training_model_layout.addWidget(wait_widget)
 
         # Spinner layout
         spinner_layout = QHBoxLayout()
@@ -2224,17 +2223,108 @@ class TrainingModelScreen(QMainWindow):
 
         spinner_widget = QWidget()
         spinner_widget.setLayout(spinner_layout)
-        base_layout.addWidget(spinner_widget)
+        training_model_layout.addWidget(spinner_widget)
 
         # Blank space three
         blank_space_three = QLabel()
         blank_space_three.setMaximumSize(10, 800)
-        base_layout.addWidget(blank_space_three)
+        training_model_layout.addWidget(blank_space_three)
+
+        training_model_widget = QWidget()
+        training_model_widget.setLayout(training_model_layout)
+        self.stacked_widget.addWidget(training_model_widget)
+        # --- End of training model widget
+
+        # --- Finished BDP widget
+        finished_bdp_layout = QVBoxLayout()
+        finished_bdp_layout.setAlignment(Qt.AlignHCenter)
+
+        # Blank space
+        blank_space = QLabel()
+        blank_space.setMaximumSize(10, 60)
+        finished_bdp_layout.addWidget(blank_space)
+
+        # Congrats label
+        congrats_layout = QHBoxLayout()
+        congrats_layout.setAlignment(Qt.AlignHCenter)
+        congrats_layout.setContentsMargins(0, 0, 0, 0)
+
+        congrats_label = QLabel(f"We're done!")
+        congrats_font = congrats_label.font()
+        congrats_font.setPointSize(20)
+        congrats_label.setFont(congrats_font)
+        congrats_label.setMaximumSize(200, 70)
+        congrats_label.setMinimumSize(200, 70)
+        congrats_layout.addWidget(congrats_label)
+
+        congrats_widget = QWidget()
+        congrats_widget.setLayout(congrats_layout)
+        congrats_widget.setMaximumSize(2000, 70)
+        finished_bdp_layout.addWidget(congrats_widget)
+
+        # Finished label
+        finished_layout = QHBoxLayout()
+        finished_layout.setAlignment(Qt.AlignHCenter)
+        finished_layout.setContentsMargins(0, 0, 0, 0)
+
+        finished_label = QLabel("Finished Training")
+        finished_font = finished_label.font()
+        finished_font.setPointSize(25)
+        finished_label.setFont(finished_font)
+        finished_label.setMaximumSize(320, 80)
+        finished_label.setMinimumSize(320, 80)
+        finished_layout.addWidget(finished_label)
+
+        finished_widget = QWidget()
+        finished_widget.setLayout(finished_layout)
+        finished_widget.setMaximumSize(2000, 80)
+        finished_bdp_layout.addWidget(finished_widget)
+
+        # Continue button
+        continue_layout = QHBoxLayout()
+        continue_layout.setAlignment(Qt.AlignHCenter)
+
+        continue_btn = QPushButton("Continue")
+        continue_font = continue_btn.font()
+        continue_font.setPointSize(18)
+        continue_btn.setFont(continue_font)
+        continue_btn.setStyleSheet(
+            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+        continue_btn.clicked.connect(self.finished_train_btn_clicked)
+        continue_btn.setMaximumSize(180, 80)
+        continue_btn.setMinimumSize(180, 80)
+        continue_layout.addWidget(continue_btn)
+
+        continue_widget = QWidget()
+        continue_widget.setLayout(continue_layout)
+        continue_widget.setMaximumSize(2000, 100)
+        finished_bdp_layout.addWidget(continue_widget)
+
+        # Blank space five
+        blank_space_five = QLabel()
+        blank_space_five.setMaximumSize(10, 800)
+        finished_bdp_layout.addWidget(blank_space_five)
+
+        finished_bdp_widget = QWidget()
+        finished_bdp_widget.setLayout(finished_bdp_layout)
+        self.stacked_widget.addWidget(finished_bdp_widget)
+        # --- End of Finished BDP widget
+
+        base_layout.addWidget(self.stacked_widget)
+        self.switch_layout()
 
         base_widget = Color('#f5e6d0')
         base_widget.setLayout(base_layout)
         self.setCentralWidget(base_widget)
 
+
+    def switch_layout(self):
+        global is_training_model
+        if is_training_model:
+            self.stacked_widget.setCurrentIndex(0)
+        else:
+            self.stacked_widget.setCurrentIndex(1)
+        return
 
     def convert_to_new_range(self, input_min, input_max, new_min, new_max, value_to_convert):
         # --- Convert to range [-1, 1] from [0, 100] ---
@@ -2260,6 +2350,7 @@ class TrainingModelScreen(QMainWindow):
 
             print("Training...")
             mlp = MLPRegressor(hidden_layer_sizes=(100, 100), activation='logistic', random_state=42, learning_rate_init=0.1)
+            # mlp = MLPRegressor(hidden_layer_sizes=(100), activation='logistic', random_state=42, learning_rate_init=0.1)
             mlp.fit(X_train, y_train)
 
             y_pred = mlp.predict(X_test)
@@ -2275,6 +2366,29 @@ class TrainingModelScreen(QMainWindow):
             # Save model
             model_file = f"../MusicPredictModels/{current_user_name}_music_predict.pkl"
             joblib.dump(mlp, model_file)
+
+            global is_training_model
+            is_training_model = False
+            self.switch_layout()
+
+    def finished_train_btn_clicked(self):
+        # TODO - mudar para o ecrã inicial
+        self.nextWindow = ApplicationHomeScreen()
+        self.nextWindow.show()
+        self.close()
+
+    def closeEvent(self, event):
+        if not ("ApplicationHomeScreen" in str(self.nextWindow)):
+            reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
+            if reply == QMessageBox.Yes:
+                global is_training_model
+                if is_training_model:
+                    # TODO - quando o user fecha mas ainda se está a treinar o modelo
+                    quit(0)
+
+                quit(0)
+            else:
+                event.ignore()
 
 def main():
     # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
