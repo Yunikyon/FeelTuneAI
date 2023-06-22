@@ -359,11 +359,12 @@ class MusicsWindow(QMainWindow):
         self.music_files_length = 0
 
         self.music_files = os.listdir(musics_directory)
-
+        personalized_directory = ""
         # Read training musics
         if is_in_building_dataset_phase:
             # Add personalized bdp user musics to base musics
             if os.path.exists(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'):
+                personalized_directory = f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'
                 personal_music_files = os.listdir(
                     f'../personalized_musics/{current_user_name}/building_dataset_phase_musics')
                 self.music_files.extend(personal_music_files)
@@ -380,6 +381,7 @@ class MusicsWindow(QMainWindow):
             # TODO - é recolher contexto, emoção atual da pessoa,
             # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
             if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
+                personalized_directory = f'../personalized_musics/{current_user_name}/application_musics'
                 personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/application_musics')
                 self.music_files.extend(personal_music_files)
             self.music_files_length = len(self.music_files)
@@ -388,7 +390,7 @@ class MusicsWindow(QMainWindow):
                 print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
                 exit()
 
-        self.music_thread = MusicThread(musics_directory)
+        self.music_thread = MusicThread(musics_directory, personalized_directory)
         self.music_thread.set_music("NA")
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
@@ -1258,10 +1260,11 @@ class MusicsWindow(QMainWindow):
                 if random_music not in musics_listened_by_current_user:
                     break
 
-        self.music_thread.set_music(random_music)
+        music_full_path = self.music_thread.set_music(random_music)
 
         # Set the duration of the music using Mutagen
-        audio = MP3(self.music_thread.directory+"/"+random_music)
+        # audio = MP3(self.music_thread.directory+"/"+random_music)
+        audio = MP3(music_full_path)
         self.music_progress.set_duration(int(audio.info.length))
 
         return random_music
@@ -1480,11 +1483,11 @@ class MusicsWindow(QMainWindow):
 class MusicThread(QThread):
     finished_music_signal = pyqtSignal()
 
-    def __init__(self, directory, parent=None):
+    def __init__(self, directory, personalized_directory, parent=None):
         super().__init__(parent)
 
         self.directory = directory
-        # self.music_name = music_name
+        self.personalized_directory = personalized_directory
 
         self.defined_volume = -1
         self.music_is_paused = False
@@ -1502,7 +1505,26 @@ class MusicThread(QThread):
         self.defined_volume = volume
 
     def set_music(self, music_name):
-        self.music_name = music_name
+        if music_name == "NA":
+            return
+        global_available_musics = os.listdir(self.directory)
+        music_full_path = ""
+        music_found = False
+        if os.path.exists(self.personalized_directory):
+            personalized_available_musics = os.listdir(self.personalized_directory)
+            for music in personalized_available_musics:
+                if music_name == music:
+                    music_full_path = self.personalized_directory + '/' + music
+                    music_found = True
+                    break
+        if not music_found:
+            for music in global_available_musics:
+                if music_name == music:
+                    music_full_path = self.directory + '/' + music
+                    break
+
+        self.music_name = music_full_path
+        return music_full_path
 
     def set_directory(self, directory):
         self.directory = directory
@@ -1510,7 +1532,8 @@ class MusicThread(QThread):
     def run(self):
         # ---------- Initialize Pygame Mixer ----------
         pygame.mixer.init()
-        pygame.mixer.music.load(self.directory + '/' + self.music_name)
+        # pygame.mixer.music.load(self.directory + '/' + self.music_name)
+        pygame.mixer.music.load(self.music_name)
 
         if self.defined_volume != -1:
             self.set_volume(self.defined_volume)
