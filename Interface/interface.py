@@ -237,6 +237,14 @@ def add_va_columns_from_emotions(dataset):
 
     return dataset
 
+def one_hot_encoding(filtered_df, filtered_df_column_name, predefined_columns):
+    one_hot_encoded = pd.get_dummies(filtered_df[filtered_df_column_name], columns=predefined_columns, prefix_sep=' = ', prefix=filtered_df_column_name)
+    # Add missing columns if any
+    missing_cols = set([f'{filtered_df_column_name} = {column}' for column in predefined_columns]) - set(one_hot_encoded.columns)
+    for col in missing_cols:
+        one_hot_encoded[col] = 0
+
+    return one_hot_encoded
 
 def normalize_dataset(filtered_df):
     global is_training_model
@@ -280,12 +288,39 @@ def normalize_dataset(filtered_df):
                     max_value - min_value)  # filtered_df[column].apply(normalize_value_hour) #
 
     # --- Columns: initial_emotion, last_emotion, rated_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
-    # One Hot Encoding for categorical variables
     categorical_columns = ['initial_emotion', 'idWeatherType',
                            'classWindSpeed', 'classPrecInt', 'timeOfDay', 'isWorkDay']
+
+    # Fill missing values with most frequent
     mode_imputer.fit(filtered_df[categorical_columns])
     filtered_df[categorical_columns] = mode_imputer.transform(filtered_df[categorical_columns])
+
+    # --- One Hot Encoding for categorical variables
     categorical_columns.remove('isWorkDay')  # isWorkDay is already binary
+
+    # idWeatherType one hot encoding
+    filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'idWeatherType', ['No information', 'Clear sky',
+                                                                          'Partly cloudy', 'Sunny intervals',
+                                                                        'Cloudy', 'Cloudy (High cloud)'])], axis=1)
+
+    # classWindSpeed one hot encoding
+    filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'classWindSpeed', ['Weak', 'Moderate', 'Strong',
+                                                                                           'Very', 'Strong'])], axis=1)
+
+    # classPrecInt one hot encoding
+    filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'classPrecInt', ['No precipitation', 'Weak',
+                                                                                         'Moderate', 'Strong'])], axis=1)
+
+    # timeOfDay one hot encoding
+    filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'timeOfDay', ['Night', 'Early Morning', 'Morning',
+                                                                                      'Afternoon', 'Evening'])], axis=1)
+
+    # initial_emotion one hot encoding
+    filtered_df = pd.concat(
+        [filtered_df, one_hot_encoding(filtered_df, 'initial_emotion', ['angry', 'fear', 'disgust', 'sad', 'neural', 'surprise', 'happy'])], axis=1)
+
+    filtered_df = filtered_df.drop(labels=['idWeatherType', 'classWindSpeed', 'classPrecInt', 'timeOfDay', 'initial_emotion'], axis=1)
+
     # filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
 
     # Replacing missing values
@@ -357,6 +392,7 @@ def normalize_dataset(filtered_df):
     filtered_df[numerical_columns] = filtered_df[numerical_columns].round(3)
 
     return filtered_df
+
 
 
 class LoginWindow(QMainWindow):
