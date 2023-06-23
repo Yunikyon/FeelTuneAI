@@ -300,8 +300,19 @@ def normalize_dataset(filtered_df):
 
     # idWeatherType one hot encoding
     filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'idWeatherType', ['No information', 'Clear sky',
-                                                                          'Partly cloudy', 'Sunny intervals',
-                                                                        'Cloudy', 'Cloudy (High cloud)'])], axis=1)
+                                                                                          'Partly cloudy', 'Sunny intervals',
+                                                                                          'Cloudy ', 'Cloudy (High cloud)',
+                                                                                          'Showers/rain', 'Light showers/rain',
+                                                                                          'Heavy showers/rain', 'Rain/showers',
+                                                                                          'Light rain', 'Heavy rain/showers',
+                                                                                          'Intermittent rain',
+                                                                                          'Intermittent ligth rain',
+                                                                                          'Intermittent heavy rain', 'Drizzle',
+                                                                                          'Mist', 'Fog', 'Snow', 'Thunderstorms',
+                                                                                          'Showers and thunderstorms', 'Hail',
+                                                                                          'Frost', 'Rain and thunderstorms',
+                                                                                          'Convective clouds', 'Partly cloudy',
+                                                                                          'Fog', 'Cloudy', 'Snow showers', 'Rain and snow'])], axis=1)
 
     # classWindSpeed one hot encoding
     filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'classWindSpeed', ['Weak', 'Moderate', 'Strong',
