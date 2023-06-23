@@ -286,7 +286,7 @@ def normalize_dataset(filtered_df):
     mode_imputer.fit(filtered_df[categorical_columns])
     filtered_df[categorical_columns] = mode_imputer.transform(filtered_df[categorical_columns])
     categorical_columns.remove('isWorkDay')  # isWorkDay is already binary
-    filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
+    # filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
 
     # Replacing missing values
     numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
@@ -1508,7 +1508,7 @@ class MusicsWindow(QMainWindow):
             filtered_df = normalize_dataset(df)
 
             # Save BDP normalized dataset
-            filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
+            filtered_df.to_csv(f'../{current_user_name.lower()}_normalized_dataset.csv', index=False)
 
             self.nextWindow = TrainingModelScreen()
             self.nextWindow.show()
@@ -2312,16 +2312,7 @@ class ApplicationHomeScreen(QMainWindow):
             filtered_df = normalize_dataset(df)
 
             # Make predictions on the test data
-            model_info = joblib.load(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.pkl')
-
-            model = model_from_json(model_info['model_architecture'])
-
-            optimizer_config = model_info['model_optimizer']
-            optimizer = keras.optimizers.Optimizer.from_config(optimizer_config)
-
-            model.compile(loss=model_info['model_loss'],
-                          optimizer=optimizer)
-            model.set_weights(model['model_weights'])
+            model = keras.models.load_model(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5')
 
             predictions = model.predict(filtered_df)
 
@@ -2573,6 +2564,7 @@ class TrainingModelScreen(QMainWindow):
             history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size)
 
             # Print the metric values for each epoch during training
+            print("Train results:")
             for metric_name, metric_values in history.history.items():
                 print(metric_name + ":" + str(metric_values[-1]))
 
@@ -2580,6 +2572,7 @@ class TrainingModelScreen(QMainWindow):
             evaluation_results = model.evaluate(X_test, y_test)
 
             # Print the metric values during evaluation
+            print("Evaluation results:")
             for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
                 print(metric_name + ": " + str(metric_value))
 
@@ -2591,16 +2584,17 @@ class TrainingModelScreen(QMainWindow):
             # predicted_arousal = predictions[:, 1]
 
             # Save model
-            model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.pkl"
+            model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
 
-            model_info = {
-                'model_architecture': model.to_json(),
-                'model_loss': model.loss,
-                'model_optimizer': model.optimizer.get_config(),
-                'model_weights': model.get_weights()
-            }
-
-            joblib.dump(model_info, model_file)
+            # model_info = {
+            #     'model_architecture': model.to_json(),
+            #     'model_loss': model.loss,
+            #     'model_optimizer': model.optimizer.get_config(),
+            #     'model_weights': model.get_weights()
+            # }
+            #
+            # joblib.dump(model_info, model_file)
+            model.save(model_file)
 
             global is_training_model
             is_training_model = False
