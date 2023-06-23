@@ -8,6 +8,7 @@ from time import sleep
 
 import cv2
 import joblib
+import keras.optimizers
 import librosa
 import numpy as np
 import pandas as pd
@@ -20,6 +21,8 @@ from mutagen.mp3 import MP3
 from keras.models import Model
 from keras.layers import Input, Dense
 from keras.optimizers import SGD
+from tensorflow.python.keras import optimizers
+from tensorflow.python.keras.models import model_from_json
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -84,6 +87,7 @@ class Color(QWidget):
         palette.setColor(QPalette.Window, QColor(color))
         self.setPalette(palette)
 
+
 class CircleProgressWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -147,6 +151,212 @@ def confirm_warning(self, title, message):
         QMessageBox.Yes | QMessageBox.No,
     )
     return reply
+
+def convert_emotions_to_va_values(emotion):
+    #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad
+    percentages = emotion.split('|')[1]
+    angry, disgust, fear, happy, sad, surprise, neutral = percentages.split('-')
+    angry, disgust, fear, happy, sad, surprise, neutral = float(angry), float(disgust), float(fear), float(happy), float(sad), float(surprise), float(neutral)
+    high = 0.84
+    medium = 0.5
+    low = 0.16
+    valence_sum = surprise * medium + neutral * medium + sad * low + happy * high + fear * low + disgust * low + angry * low
+    arousal_sum = surprise * high + neutral * medium + sad * medium + happy * medium + fear * high + disgust * medium + angry * high
+
+    # Apply the conversion to the value
+    valence_sum = convert_to_new_range(0, 100, 0, 1, valence_sum)
+    arousal_sum = convert_to_new_range(0, 100, 0, 1, arousal_sum)
+
+    return valence_sum, arousal_sum
+
+
+def convert_to_new_range(input_min, input_max, new_min, new_max, value_to_convert):
+    # --- Convert to range [-1, 1] from [0, 100] ---
+    conversion_factor = (new_max - new_min) / (input_max - input_min)
+    offset = new_min - input_min * conversion_factor
+
+    value_converted = value_to_convert * conversion_factor + offset
+
+    return value_converted
+
+
+def get_context():
+    dataframe = contextMain.execute()
+    if dataframe is not None:
+        csv_context = dataframe.to_csv(index=False)
+        context_headers = csv_context.split('\n')[0]
+        context_headers = context_headers.split(',')
+
+        number_of_headers = len(context_headers)
+        context_values = csv_context.split('\n')[1]
+        context_values = context_values.split(',')
+
+        context_dict = {}
+        for header, value in zip(context_headers, context_values):
+            header = header.rstrip('\r')
+            value = str(value).rstrip('\r')
+            context_dict.update({header: value})
+        # context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
+        return context_dict, number_of_headers
+    return {}, 0
+
+
+def merge_musics_va_to_dataset(dataset):
+    delimiter = '~~~'
+    with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
+        try:
+            musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
+        except pd.errors.ParserError:
+            musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
+    dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
+
+    for index,row in dataset.iterrows():
+        dataset.at[index, 'music_valence'] = convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_valence'])
+        dataset.at[index, 'music_arousal'] = convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_arousal'])
+
+    return dataset
+
+
+def add_va_columns_from_emotions(dataset):
+    global is_training_model
+    global goal_emotion
+    for index, row in dataset.iterrows():
+        #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
+        emotions = row['instant_seconds|percentages|dominant_emotion']
+        first_emotion = emotions.split(';')[0]
+        if is_training_model:
+            last_emotion = emotions.split(';')[-2]
+            dataset.at[index, 'valence_last_emotion'], dataset.at[
+                index, 'arousal_last_emotion'] = convert_emotions_to_va_values(last_emotion)
+        else:
+            # TODO - Ver como está guardado
+            dataset.at[index, 'valence_last_emotion'] = convert_to_new_range(-1, 1, 0, 1, goal_emotion[0])
+            dataset.at[index, 'arousal_last_emotion'] = convert_to_new_range(-1, 1, 0, 1, goal_emotion[1])
+
+        dataset.at[index, 'valence_initial_emotion'], dataset.at[index, 'arousal_initial_emotion'] = convert_emotions_to_va_values(first_emotion)
+
+    return dataset
+
+
+def normalize_dataset(filtered_df):
+    global is_training_model
+    if is_training_model:
+        filtered_df = filtered_df.drop(labels=['username', 'last_emotion', 'rated_emotion'], axis=1)
+        filtered_df = merge_musics_va_to_dataset(filtered_df)
+        filtered_df = filtered_df.drop(labels=['music_name'], axis=1)
+
+    if filtered_df is None:
+        # TODO - mostrar erro
+        return
+
+    def convert_hour_to_minutes(time):
+        if time is None or time == '':
+            return
+        time = str(time)
+        if time == 'nan':
+            return
+        hours, minutes, seconds = map(int, time.split(':'))
+        hours_in_minutes = hours * 60
+        total_minutes = hours_in_minutes + minutes
+        return total_minutes
+
+    mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+    mode_imputer = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+
+    def min_max_normalization(value, min, max):
+        return (value - min) / (max - min)
+
+    # --------------- Create a new normalized dataframe for model training ---------------
+    # --- Columns: listenedAt, sunset, sunrise ---
+    hours_columns = ['listenedAt', 'sunset', 'sunrise', 'day_length']
+    # hours_scaler = MinMaxScaler(feature_range=(0, 1))
+    # filtered_df[hours_columns] = hours_scaler.fit_transform(filtered_df[hours_columns])
+    for column in hours_columns:
+        filtered_df[column] = filtered_df[column].apply(convert_hour_to_minutes)
+        filtered_df[column] = mean_imputer.fit_transform(filtered_df[column].array.reshape(-1, 1))
+        min_value = 0  # filtered_df[column].min()
+        max_value = 1440  # filtered_df[column].max()
+        filtered_df[column] = (filtered_df[column] - min_value) / (
+                    max_value - min_value)  # filtered_df[column].apply(normalize_value_hour) #
+
+    # --- Columns: initial_emotion, last_emotion, rated_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
+    # One Hot Encoding for categorical variables
+    categorical_columns = ['initial_emotion', 'idWeatherType',
+                           'classWindSpeed', 'classPrecInt', 'timeOfDay', 'isWorkDay']
+    mode_imputer.fit(filtered_df[categorical_columns])
+    filtered_df[categorical_columns] = mode_imputer.transform(filtered_df[categorical_columns])
+    categorical_columns.remove('isWorkDay')  # isWorkDay is already binary
+    filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
+
+    # Replacing missing values
+    numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
+                         'min_temp', 'max_temp', 'cloud_pct',
+                         'humidity', 'wind_speed', 'precipitaProb']
+    mean_imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
+    filtered_df[numerical_columns] = mean_imputer.transform(
+        filtered_df[numerical_columns])  # replaces the missing values with the mean
+
+    # def normalize_temperature(value):
+    #     min_value = -20
+    #     max_value = 50
+    #     return (value - min_value) / (max_value - min_value)
+
+    # --- Columns: tMin, tMax, temp, feels_like, min_temp, max_temp ---
+    temperature_columns = ['tMin', 'tMax', 'temp', 'feels_like', 'min_temp', 'max_temp']
+    for column in temperature_columns:
+        min_value = -20  # filtered_df[column].min()
+        max_value = 50  # filtered_df[column].max()
+        # filtered_df[column] = filtered_df[column].apply(normalize_temperature)
+        filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
+    # temp_scaler = MinMaxScaler(feature_range=(0, 1))
+    # filtered_df[temperature_columns] = temp_scaler.fit_transform(filtered_df[temperature_columns])
+
+    # def normalize_probability(value):
+    #     min_value = 0
+    #     max_value = 100
+    #     return (value - min_value) / (max_value - min_value)
+
+    from_0_to_100_values = ['cloud_pct', 'precipitaProb', 'humidity']
+    for column in from_0_to_100_values:
+        min_value = 0
+        max_value = 100
+        filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
+        # filtered_df[column] = filtered_df[column].apply(normalize_probability)
+
+    # percentage_scaler = MinMaxScaler(feature_range=(0, 1))
+    # filtered_df[from_0_to_100_values] = percentage_scaler.fit_transform(filtered_df[from_0_to_100_values])
+
+    # --- Column: wind_speed ---
+    # wind_speed_scaler = MinMaxScaler(feature_range=(0, 1))
+    # filtered_df['wind_speed'] = wind_speed_scaler.fit_transform(filtered_df[['wind_speed']])
+
+    for index, row in filtered_df.iterrows():
+        filtered_df.at[index, 'wind_speed'] = min_max_normalization(row['wind_speed'], 0, 75)
+
+    # Apply scaler
+    # scaler = StandardScaler()
+    # filtered_df[numerical_columns] = scaler.fit_transform(filtered_df[numerical_columns])
+
+    # --- Column: isWorkDay ---
+    filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
+
+    filtered_df = add_va_columns_from_emotions(filtered_df)
+    filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
+
+    numerical_columns.extend(['listenedAt', 'sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
+                              'arousal_initial_emotion', 'valence_last_emotion', 'arousal_last_emotion'])
+
+    if is_training_model:
+        numerical_columns.extend(['music_valence', 'music_arousal'])
+
+    # Discretize the numerical columns into categories
+    # num_bins = 7  # Number of bins or categories
+    # for col in numerical_columns:
+    #     filtered_df[col] = pd.cut(filtered_df[col], bins=num_bins, labels=False)
+
+    filtered_df[numerical_columns] = filtered_df[numerical_columns].round(3)
+
+    return filtered_df
 
 
 class LoginWindow(QMainWindow):
@@ -370,6 +580,8 @@ class MusicsWindow(QMainWindow):
                 self.music_files.extend(personal_music_files)
 
             self.music_files_length = len(self.music_files)
+
+            # Verify if doesn't exit musics
             global music_files_bdp_length
             music_files_bdp_length = self.music_files_length
 
@@ -379,13 +591,15 @@ class MusicsWindow(QMainWindow):
         else:  # Read application musics
 
             # TODO - é recolher contexto, emoção atual da pessoa,
-            # emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
+            #  emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
+            # Add personalized application user musics to base musics
             if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
                 personalized_directory = f'../personalized_musics/{current_user_name}/application_musics'
                 personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/application_musics')
                 self.music_files.extend(personal_music_files)
-            self.music_files_length = len(self.music_files)
 
+            # Verify if doesn't exit musics
+            self.music_files_length = len(self.music_files)
             if self.music_files_length == 0:
                 print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
                 exit()
@@ -396,7 +610,6 @@ class MusicsWindow(QMainWindow):
 
         # Emotion Thread Initialization
         self.emotion_thread = EmotionsThread()
-        self.emotion_thread.new_emotion.connect(self.new_emotion)
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -1155,20 +1368,6 @@ class MusicsWindow(QMainWindow):
                 else: # Finished BDP Phase
                     self.stacked_widget.setCurrentIndex(3)
 
-    def get_context(self):
-        dataframe = contextMain.execute()
-        if dataframe is not None:
-            csv_context = dataframe.to_csv(index=False)
-            context_headers = csv_context.split('\n')[0]
-            context_headers = context_headers.split(',')
-
-            number_of_headers = len(context_headers)
-            context_values = csv_context.split('\n')[1]
-            context_values = context_values.split(',')
-            context_dict = {header: str(value).rstrip('\r') for header, value in zip(context_headers, context_values)}
-            return context_dict, number_of_headers
-        return {}, 0
-
     def emotion_rated(self, emotion):
         global data
         global new_record
@@ -1185,6 +1384,8 @@ class MusicsWindow(QMainWindow):
         self.switch_layout()
         current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
 
+
+        # TODO - alterar new_record['instant_seconds|percentages|dominant_emotion'] consoante rated emotion
         new_dict = {'username': current_user_name.lower(), 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
                     'music_name': new_record['music_name'],
                     'last_emotion': new_record['last_emotion'],
@@ -1198,7 +1399,7 @@ class MusicsWindow(QMainWindow):
         global last_context_data
         # Update context if there is no context or if 20 minutes have elapsed since last time
         if last_time_context_data_was_called == "" or ((update_time - last_time_context_data_was_called).total_seconds() > 1200):
-            context_dictionary, number_of_headers = self.get_context()
+            context_dictionary, number_of_headers = get_context()
             if number_of_headers == 18:
                 last_time_context_data_was_called = update_time
             last_context_data = context_dictionary
@@ -1283,186 +1484,6 @@ class MusicsWindow(QMainWindow):
                 # TODO - ir mudando a diretoria se for personalized ou não
                 self.music_thread.start()
 
-    def new_emotion(self, result):
-        print(result)
-
-    def merge_musics_va_to_dataset(self, dataset):
-        delimiter = '~~~'
-        with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
-            try:
-                musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
-            except pd.errors.ParserError:
-                musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
-        dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
-
-        for index,row in dataset.iterrows():
-            dataset.at[index, 'music_valence'] = self.convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_valence'])
-            dataset.at[index, 'music_arousal'] = self.convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_arousal'])
-
-        return dataset
-
-    def convert_emotions_to_va_values(self, emotion):
-        #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad
-        percentages = emotion.split('|')[1]
-        angry, disgust, fear, happy, sad, surprise, neutral = percentages.split('-')
-        angry, disgust, fear, happy, sad, surprise, neutral = float(angry), float(disgust), float(fear), float(happy), float(sad), float(surprise), float(neutral)
-        high = 0.84
-        medium = 0.5
-        low = 0.16
-        valence_sum = surprise * medium + neutral * medium + sad * low + happy * high + fear * low + disgust * low + angry * low
-        arousal_sum = surprise * high + neutral * medium + sad * medium + happy * medium + fear * high + disgust * medium + angry * high
-
-        # Apply the conversion to the value
-        valence_sum = self.convert_to_new_range(0, 100, 0, 1, valence_sum)
-        arousal_sum = self.convert_to_new_range(0, 100, 0, 1, arousal_sum)
-
-        return valence_sum, arousal_sum
-
-    def convert_to_new_range(self, input_min, input_max, new_min, new_max, value_to_convert):
-        # --- Convert to range [-1, 1] from [0, 100] ---
-        conversion_factor = (new_max - new_min) / (input_max - input_min)
-        offset = new_min - input_min * conversion_factor
-
-        value_converted = value_to_convert * conversion_factor + offset
-
-        return value_converted
-
-    def add_va_columns_from_emotions(self, dataset):
-        for index, row in dataset.iterrows():
-            #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
-            emotions = row['instant_seconds|percentages|dominant_emotion']
-            first_emotion = emotions.split(';')[0]
-            last_emotion = emotions.split(';')[-2]
-            dataset.at[index, 'valence_initial_emotion'], dataset.at[index, 'arousal_initial_emotion'] = self.convert_emotions_to_va_values(first_emotion)
-            dataset.at[index, 'valence_last_emotion'], dataset.at[index, 'arousal_last_emotion'] = self.convert_emotions_to_va_values(last_emotion)
-        return dataset
-
-    def normalize_and_save_bdp_dataset(self):
-        with open('../dataset_for_model_training.csv', 'r') as file_obj:
-
-            df = pd.read_csv(file_obj)
-            filtered_df = pd.DataFrame(df) # So that we don't change the original df (and filtered_df can't be a view)
-            # filtered_df = filtered_df[filtered_df['username'] == current_user_name] # TODO - remover essa linha
-
-        filtered_df = filtered_df.drop(labels=['username'], axis=1)
-        filtered_df = self.merge_musics_va_to_dataset(filtered_df)
-        filtered_df = filtered_df.drop(labels=['music_name'], axis=1)
-        if filtered_df is None:
-            #TODO - mostrar erro
-            return
-
-        def convert_hour_to_minutes(time):
-            if time is None or time == '':
-                return
-            time = str(time)
-            if time == 'nan':
-                return
-            hours, minutes, seconds = map(int, time.split(':'))
-            hours_in_minutes = hours * 60
-            total_minutes = hours_in_minutes + minutes
-            return total_minutes
-
-        # def normalize_value_hour(value):
-        #     min_value = 0
-        #     max_value = 1440
-        #     return (value - min_value) / (max_value - min_value)
-
-        mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
-        mode_imputer = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
-
-        def min_max_normalization(value, min, max):
-            return (value - min) / (max - min)
-
-        # --------------- Create a new normalized dataframe for model training ---------------
-        # --- Columns: listenedAt, sunset, sunrise ---
-        hours_columns = ['listenedAt', 'sunset', 'sunrise', 'day_length']
-        # hours_scaler = MinMaxScaler(feature_range=(0, 1))
-        # filtered_df[hours_columns] = hours_scaler.fit_transform(filtered_df[hours_columns])
-        for column in hours_columns:
-            filtered_df[column] = filtered_df[column].apply(convert_hour_to_minutes)
-            filtered_df[column] = mean_imputer.fit_transform(filtered_df[column].array.reshape(-1, 1))
-            min_value = 0 # filtered_df[column].min()
-            max_value = 1440 # filtered_df[column].max()
-            filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value) # filtered_df[column].apply(normalize_value_hour) #
-
-        # --- Columns: initial_emotion, last_emotion, rated_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
-        # One Hot Encoding for categorical variables
-        categorical_columns = ['initial_emotion', 'last_emotion',
-                                'rated_emotion', 'idWeatherType',
-                                'classWindSpeed', 'classPrecInt', 'timeOfDay', 'isWorkDay']
-        mode_imputer.fit(filtered_df[categorical_columns])
-        filtered_df[categorical_columns] = mode_imputer.transform(filtered_df[categorical_columns])
-        categorical_columns.remove('isWorkDay') # isWorkDay is already binary
-        filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
-
-        # Replacing missing values
-        numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
-                             'min_temp', 'max_temp', 'cloud_pct',
-                             'humidity', 'wind_speed', 'precipitaProb']
-        mean_imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
-        filtered_df[numerical_columns] = mean_imputer.transform(
-            filtered_df[numerical_columns])  # replaces the missing values with the mean
-
-        # def normalize_temperature(value):
-        #     min_value = -20
-        #     max_value = 50
-        #     return (value - min_value) / (max_value - min_value)
-
-        # --- Columns: tMin, tMax, temp, feels_like, min_temp, max_temp ---
-        temperature_columns = ['tMin', 'tMax', 'temp', 'feels_like', 'min_temp', 'max_temp']
-        for column in temperature_columns:
-            min_value = -20 # filtered_df[column].min()
-            max_value = 50 # filtered_df[column].max()
-            # filtered_df[column] = filtered_df[column].apply(normalize_temperature)
-            filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
-        # temp_scaler = MinMaxScaler(feature_range=(0, 1))
-        # filtered_df[temperature_columns] = temp_scaler.fit_transform(filtered_df[temperature_columns])
-
-        # def normalize_probability(value):
-        #     min_value = 0
-        #     max_value = 100
-        #     return (value - min_value) / (max_value - min_value)
-
-        from_0_to_100_values = ['cloud_pct', 'precipitaProb', 'humidity']
-        for column in from_0_to_100_values:
-            min_value = 0
-            max_value = 100
-            filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
-            # filtered_df[column] = filtered_df[column].apply(normalize_probability)
-
-        # percentage_scaler = MinMaxScaler(feature_range=(0, 1))
-        # filtered_df[from_0_to_100_values] = percentage_scaler.fit_transform(filtered_df[from_0_to_100_values])
-
-        # --- Column: wind_speed ---
-        # wind_speed_scaler = MinMaxScaler(feature_range=(0, 1))
-        # filtered_df['wind_speed'] = wind_speed_scaler.fit_transform(filtered_df[['wind_speed']])
-
-        for index, row in filtered_df.iterrows():
-            filtered_df.at[index, 'wind_speed'] = min_max_normalization(row['wind_speed'], 0, 75)
-
-        # Apply scaler
-        # scaler = StandardScaler()
-        # filtered_df[numerical_columns] = scaler.fit_transform(filtered_df[numerical_columns])
-
-        # --- Column: isWorkDay ---
-        filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
-
-        filtered_df = self.add_va_columns_from_emotions(filtered_df)
-        filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
-
-        numerical_columns.extend(['listenedAt','sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
-                                  'arousal_initial_emotion', 'valence_last_emotion', 'arousal_last_emotion',
-                                  'music_valence', 'music_arousal'])
-
-        # Discretize the numerical columns into categories
-        # num_bins = 7  # Number of bins or categories
-        # for col in numerical_columns:
-        #     filtered_df[col] = pd.cut(filtered_df[col], bins=num_bins, labels=False)
-
-        filtered_df[numerical_columns] = filtered_df[numerical_columns].round(3)
-
-        filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
-
     def finished_btn_clicked(self):
         global current_user_name
         global is_in_building_dataset_phase
@@ -1470,14 +1491,29 @@ class MusicsWindow(QMainWindow):
         global is_training_model
         is_training_model = True
 
+        # self.emotion_thread.stop_emotions()
+        self.emotion_thread.quit()
+
         self.save_bdp_progress_to_csv()
         self.save_user_progress()
-        self.normalize_and_save_bdp_dataset()
 
-        self.nextWindow = TrainingModelScreen()
-        self.nextWindow.show()
-        self.close()
-        self.nextWindow.train_model()
+
+        # Get dataframe
+        with open('../dataset_for_model_training.csv', 'r') as file_obj:
+            dataset = pd.read_csv(file_obj)
+            df = pd.DataFrame(dataset) # So that we don't change the original df (and filtered_df can't be a view)
+            # filtered_df = filtered_df[filtered_df['username'] == current_user_name] # TODO - descomentar essa linha
+
+            # Normalize dataframe
+            filtered_df = normalize_dataset(df)
+
+            # Save BDP normalized dataset
+            filtered_df.to_csv(f'../{current_user_name}_normalized_dataset.csv', index=False)
+
+            self.nextWindow = TrainingModelScreen()
+            self.nextWindow.show()
+            self.close()
+            self.nextWindow.train_model()
 
 
 class MusicThread(QThread):
@@ -1555,16 +1591,19 @@ class MusicThread(QThread):
 
 
 class EmotionsThread(QThread):
-    new_emotion = pyqtSignal()
+    captured_one_emotion = pyqtSignal(dict)
 
     warnings.simplefilter("error")
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
+        self.capture_one = False
+
         self.emotions_running = False
         self.emotions_paused = False
         self.video = cv2.VideoCapture(0)
+
 
     def pause_emotions(self):
         self.emotions_paused = True
@@ -1594,13 +1633,27 @@ class EmotionsThread(QThread):
             if dominant_emotion != 'Not Found':
                 new_record['initial_emotion'] = dominant_emotion
 
+    def capture_one_emotion(self):
+        self.capture_one = True
+        self.run()
+
     def run(self):
         self.emotions_running = True
 
-        # Start emotion recognition
-        music_time = 6
+        if self.capture_one:
+            result = None
+            while not result or result['dominant_emotion'] == 'Not Found':
+                result = capture_emotion(self.video)
 
-        while self.emotions_running:
+            self.emotions_running = False
+            self.captured_one_emotion.emit(result)
+            pass
+
+
+        while self.emotions_running and not self.capture_one:
+            # Start emotion recognition
+            music_time = 6
+
             if not self.emotions_paused:
                 result = capture_emotion(self.video)
 
@@ -1883,16 +1936,16 @@ class BuildingPhaseHomeScreen(QMainWindow):
         # ---------- Uploads music ----------
         try:
             first_upload = False
-            folder_name = f"../personalized_musics/{current_user_name}"
+            folder_name = f"../personalized_musics/{current_user_name.lower()}"
             if not os.path.exists(folder_name):
                 os.makedirs(folder_name)
             if is_in_building_dataset_phase:
-                folder_name = f"../personalized_musics/{current_user_name}/building_dataset_phase_musics"
+                folder_name = f"../personalized_musics/{current_user_name.lower()}/building_dataset_phase_musics"
                 if not os.path.exists(folder_name):
                     os.makedirs(folder_name)
                     first_upload = True
             else:
-                folder_name = f"../personalized_musics/{current_user_name}/application_musics"
+                folder_name = f"../personalized_musics/{current_user_name.lower()}/application_musics"
                 if not os.path.exists(folder_name):
                     os.makedirs(folder_name)
                     first_upload = True
@@ -2094,6 +2147,11 @@ class ApplicationHomeScreen(QMainWindow):
 
         global current_user_name
 
+        # Emotion Thread Initialization
+        self.emotion_thread = EmotionsThread()
+        self.emotion_thread.captured_one_emotion.connect(self.emotion_captured)
+        self.initial_emotion = None
+
         # Base Layout
         base_layout = QVBoxLayout()
         base_layout.setContentsMargins(10, 20, 10, 10)
@@ -2208,25 +2266,87 @@ class ApplicationHomeScreen(QMainWindow):
 
     def show_next_window(self):
         global new_record
+        global goal_emotion
+        global current_user_name
 
-        self.nextWindow = MusicsWindow()
-
-        success, frames = self.nextWindow.emotion_thread.video.read()
+        # Check if camera is avaliable
+        success, frames = self.emotion_thread.video.read()
         if not success:
             QMessageBox.information(
                 self, "Error", "Your camera is not properly working,\n please fix that and try again",
                 QMessageBox.Ok,
             )
         else:
+            # 1 - Get initial emotion
+            # TODO - ficámos aqui :((
+            self.emotion_thread.capture_one_emotion()
+
+            while not self.initial_emotion:
+                continue
+
+            # ---------- Round emotions values ----------
+            percentages = 'NA|'
+            for emotion in self.initial_emotion['emotion']:
+                percentages += str(round(self.initial_emotion['emotion'][emotion], 3))
+                if emotion != 'neutral':  # last emotion
+                    percentages += '-'
+                else:
+                    percentages += '|'+self.initial_emotion['dominant_emotion']
+
+            # initial_emotion_valence, initial_emotion_arousal = convert_emotions_to_va_values(initial_emotion)
+            # initial_emotion_valence_converted = convert_to_new_range(-1, 1, 0, 1, initial_emotion_valence)
+            # initial_emotion_arousal_converted = convert_to_new_range(-1, 1, 0, 1, initial_emotion_arousal)
+
+            # 2 - Get context
+            current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
+
+            new_dict = {'listenedAt': current_time, 'instant_seconds|percentages|dominant_emotion': percentages,
+                        'initial_emotion': self.initial_emotion['dominant_emotion']}
+
+            context_dictionary, number_of_headers = get_context()
+
+            new_dict.update(context_dictionary)
+
+            df = pd.DataFrame(new_dict, index=[0])
+
+            filtered_df = normalize_dataset(df)
+
+            # Make predictions on the test data
+            model_info = joblib.load(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.pkl')
+
+            model = model_from_json(model_info['model_architecture'])
+
+            optimizer_config = model_info['model_optimizer']
+            optimizer = keras.optimizers.Optimizer.from_config(optimizer_config)
+
+            model.compile(loss=model_info['model_loss'],
+                          optimizer=optimizer)
+            model.set_weights(model['model_weights'])
+
+            predictions = model.predict(filtered_df)
+
+            # Extract the predicted valence and arousal values
+            predicted_valence = predictions[0]
+            predicted_arousal = predictions[1]
+
+            print(predicted_valence)
+            print(predicted_arousal)
+
+            self.nextWindow = MusicsWindow()
             self.nextWindow.music_playing = True
             self.nextWindow.switch_layout()
 
-            # TODO - com o algoritmo treinado
+            # TODO - atribuir música
             music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
 
             new_record['music_name'] = music_name
             self.nextWindow.show()
             self.close()
+
+    def emotion_captured(self, result):
+        self.initial_emotion = result
+        return
+
 
 
 class TrainingModelScreen(QMainWindow):
@@ -2413,15 +2533,6 @@ class TrainingModelScreen(QMainWindow):
             self.stacked_widget.setCurrentIndex(1)
         return
 
-    def convert_to_new_range(self, input_min, input_max, new_min, new_max, value_to_convert):
-        # --- Convert to range [-1, 1] from [0, 100] ---
-        conversion_factor = (new_max - new_min) / (input_max - input_min)
-        offset = new_min - input_min * conversion_factor
-
-        value_converted = value_to_convert * conversion_factor + offset
-
-        return value_converted
-
     def train_model(self):
         global current_user_name
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
@@ -2480,8 +2591,16 @@ class TrainingModelScreen(QMainWindow):
             # predicted_arousal = predictions[:, 1]
 
             # Save model
-            model_file = f"../MusicPredictModels/{current_user_name}_music_predict.pkl"
-            joblib.dump(model, model_file)
+            model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.pkl"
+
+            model_info = {
+                'model_architecture': model.to_json(),
+                'model_loss': model.loss,
+                'model_optimizer': model.optimizer.get_config(),
+                'model_weights': model.get_weights()
+            }
+
+            joblib.dump(model_info, model_file)
 
             global is_training_model
             is_training_model = False
