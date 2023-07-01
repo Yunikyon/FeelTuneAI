@@ -1375,7 +1375,6 @@ class MusicsWindow(QMainWindow):
             new_point = pd.DataFrame([[predicted_valence, predicted_arousal]], columns=['music_valence', 'music_arousal'])
 
             # Find the index of the closest point to the new point
-            # TODO - ficámos aqui :D
             distance, index = nbrs.kneighbors(new_point)
 
             # 6. Get name of the music to play -> music with the minimum distance
@@ -1688,7 +1687,7 @@ class MusicsWindow(QMainWindow):
         with open('../dataset_for_model_training.csv', 'r') as file_obj:
             dataset = pd.read_csv(file_obj)
             df = pd.DataFrame(dataset) # So that we don't change the original df (and filtered_df can't be a view)
-            filtered_df = filtered_df[filtered_df['username'] == current_user_name]
+            df = df[df['username'] == current_user_name]
 
             # Normalize dataframe
             filtered_df = normalize_dataset(df)
