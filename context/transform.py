@@ -68,8 +68,8 @@ def get_is_work_day(date):
         return None
     day = date.split("T")[0]
     day = datetime.strptime(day, '%Y-%m-%d').date()
-    if day.weekday() < 5:
-        return 'Yes'
+    if day.weekday() > 4:
+        return 'No'
     # Call api to check whether current day is an holiday or not
     api_key = "3db2fcbdd9654b2d8d0483278ec5a7c3"
     d, m, y = day.day, day.month, day.year

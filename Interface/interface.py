@@ -318,6 +318,11 @@ def normalize_dataset(filtered_df):
     # --- Column: isWorkDay - Map to binary (no = 0 : yes = 1) ---
     filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
 
+    # Replace missing isWorkDay values with most frequent
+    array_1d_isWorkDay = np.array(filtered_df['isWorkDay'])
+    array_2d_isWorkDay = array_1d_isWorkDay.reshape(-1, 1)
+    filtered_df['isWorkDay'] = mode_imputer.fit_transform(array_2d_isWorkDay).flatten()
+
     # --- Categorical columns: initial_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
     categorical_columns = ['initial_emotion', 'idWeatherType',
                            'classWindSpeed', 'classPrecInt', 'timeOfDay']
@@ -358,7 +363,7 @@ def normalize_dataset(filtered_df):
 
     # initial_emotion one hot encoding
     filtered_df = pd.concat(
-        [filtered_df, one_hot_encoding(filtered_df, 'initial_emotion', ['angry', 'fear', 'disgust', 'sad', 'neural',
+        [filtered_df, one_hot_encoding(filtered_df, 'initial_emotion', ['angry', 'fear', 'disgust', 'sad', 'neutral',
                                                                         'surprise', 'happy'])], axis=1)
 
     # drop labels used for one hot encoding, they will not be used anymore
@@ -430,7 +435,7 @@ def normalize_dataset(filtered_df):
         # Convert the range [-1; 1] to the range [0; 1]
         min_value = -1
         max_value = 1
-        filtered_df[column] = min_max_normalization(column, min_value, max_value)
+        filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
 
     filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
 
@@ -2385,10 +2390,6 @@ class ApplicationHomeScreen(QMainWindow):
                 else:
                     initial_emotion_percentages += '|'+self.initial_emotion['dominant_emotion']
 
-            # initial_emotion_valence, initial_emotion_arousal = convert_emotions_to_va_values(initial_emotion)
-            # initial_emotion_valence_converted = convert_to_new_range(-1, 1, 0, 1, initial_emotion_valence)
-            # initial_emotion_arousal_converted = convert_to_new_range(-1, 1, 0, 1, initial_emotion_arousal)
-
             current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
             new_dict = {'listenedAt': current_time, 'instant_seconds|percentages|dominant_emotion': initial_emotion_percentages,
                         'initial_emotion': self.initial_emotion['dominant_emotion']}
@@ -2404,14 +2405,13 @@ class ApplicationHomeScreen(QMainWindow):
             # Make predictions on the test data
             model = keras.models.load_model(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5')
 
-            predictions = model.predict(filtered_df)
+            predictions = model.predict(filtered_df)[0]
 
             # Extract the predicted valence and arousal values
-            predicted_valence = predictions[0]
-            predicted_arousal = predictions[1]
+            predicted_valence = round(convert_to_new_range(0, 1, -1, 1, predictions[0]), 3)
+            predicted_arousal = round(convert_to_new_range(0, 1, -1, 1, predictions[1]), 3)
 
-            print(predicted_valence)
-            print(predicted_arousal)
+            print("Valence: " + str(predicted_valence) + " Arousal: " + str(predicted_arousal))
 
             self.nextWindow = MusicsWindow()
             self.nextWindow.music_playing = True
