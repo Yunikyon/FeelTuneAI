@@ -1370,14 +1370,16 @@ class MusicsWindow(QMainWindow):
             # 5. Calculate distance between predicted valence and arousal and the pair's valence and arousal
             # Create a NearestNeighbors model and fit your data
             nbrs = NearestNeighbors(n_neighbors=1).fit(valence_arousal_pairs)
+
             # Define your new point
-            new_point = [predicted_valence, predicted_arousal]
+            new_point = pd.DataFrame([[predicted_valence, predicted_arousal]], columns=['music_valence', 'music_arousal'])
+
             # Find the index of the closest point to the new point
             # TODO - ficámos aqui :D
-            distances, indices = nbrs.kneighbors([new_point])
+            distance, index = nbrs.kneighbors(new_point)
 
             # 6. Get name of the music to play -> music with the minimum distance
-            music_name = application_music_names[indices[0][0]]
+            music_name = application_music_names[index[0][0]]
 
             return music_name
 
@@ -2454,7 +2456,7 @@ class ApplicationHomeScreen(QMainWindow):
 
         # Get every valence and arousal pairs from ApplicationMusics
         delimiter = '~~~'
-        with open('../applications_musics_va.csv', 'r') as file_obj:
+        with open('../applications_musics_va.csv', 'r', encoding="utf-8") as file_obj:
             try:
                 musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
             except pd.errors.ParserError:
@@ -2481,6 +2483,8 @@ class ApplicationHomeScreen(QMainWindow):
         # Set the duration of the music using Mutagen
         audio = MP3(music_full_path)
         self.nextWindow.music_progress.set_duration(int(audio.info.length))
+
+        self.nextWindow.music_thread.start()
 
         self.nextWindow.show()
         self.close()
