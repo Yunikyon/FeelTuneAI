@@ -153,19 +153,25 @@ def confirm_warning(self, title, message):
     return reply
 
 def convert_emotions_to_va_values(emotion):
-    #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad
+    # Example -> 6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad
     percentages = emotion.split('|')[1]
+
+    # 1. Get percentages
     angry, disgust, fear, happy, sad, surprise, neutral = percentages.split('-')
     angry, disgust, fear, happy, sad, surprise, neutral = float(angry), float(disgust), float(fear), float(happy), float(sad), float(surprise), float(neutral)
+
+    # 2. Define the limits of the graphic percentage space
     high = 0.84
     medium = 0.5
     low = 0.16
+
+    # 3. Calculate and get valence and arousal
     valence_sum = surprise * medium + neutral * medium + sad * low + happy * high + fear * low + disgust * low + angry * low
     arousal_sum = surprise * high + neutral * medium + sad * medium + happy * medium + fear * high + disgust * medium + angry * high
 
-    # Apply the conversion to the value
-    valence_sum = convert_to_new_range(0, 100, 0, 1, valence_sum)
-    arousal_sum = convert_to_new_range(0, 100, 0, 1, arousal_sum)
+    # 4. Convert from the range [0; 100] to the range [0; 1]
+    valence_sum = convert_to_new_range(0, 100, -1, 1, valence_sum)
+    arousal_sum = convert_to_new_range(0, 100, -1, 1, arousal_sum)
 
     return valence_sum, arousal_sum
 
@@ -219,27 +225,37 @@ def merge_musics_va_to_dataset(dataset):
 
 def add_va_columns_from_emotions(dataset):
     global is_training_model
-    global goal_emotion
-    for index, row in dataset.iterrows():
-        #6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
-        emotions = row['instant_seconds|percentages|dominant_emotion']
-        first_emotion = emotions.split(';')[0]
-        if is_training_model:
-            last_emotion = emotions.split(';')[-2]
-            dataset.at[index, 'valence_last_emotion'], dataset.at[
-                index, 'arousal_last_emotion'] = convert_emotions_to_va_values(last_emotion)
-        else:
-            # TODO - Ver como está guardado
-            dataset.at[index, 'valence_last_emotion'] = convert_to_new_range(-1, 1, 0, 1, goal_emotion[0])
-            dataset.at[index, 'arousal_last_emotion'] = convert_to_new_range(-1, 1, 0, 1, goal_emotion[1])
 
-        dataset.at[index, 'valence_initial_emotion'], dataset.at[index, 'arousal_initial_emotion'] = convert_emotions_to_va_values(first_emotion)
+    for index, row in dataset.iterrows():
+        # Example -> 6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
+        emotions = row['instant_seconds|percentages|dominant_emotion']
+
+        first_emotion = emotions.split(';')[0]
+
+        if is_training_model:  # Last emotion
+            # 1. Get last emotion (percentages)
+            last_emotion = emotions.split(';')[-2]
+
+            # 2. Convert last emotion's percentages to valence and arousal
+            dataset.at[index, 'valence_last_emotion'],\
+                dataset.at[index, 'arousal_last_emotion'] = convert_emotions_to_va_values(last_emotion)
+        else:  # Goal emotion
+            global goal_emotion
+            dataset.at[index, 'valence_last_emotion'] = goal_emotion[0]
+            dataset.at[index, 'arousal_last_emotion'] = goal_emotion[1]
+
+        # Convert first emotion's percentages to valence and arousal
+        dataset.at[index, 'valence_initial_emotion'],\
+            dataset.at[index, 'arousal_initial_emotion'] = convert_emotions_to_va_values(first_emotion)
 
     return dataset
 
 def one_hot_encoding(filtered_df, filtered_df_column_name, predefined_columns):
-    one_hot_encoded = pd.get_dummies(filtered_df[filtered_df_column_name], columns=predefined_columns, prefix_sep=' = ', prefix=filtered_df_column_name)
-    # Add missing columns if any
+    # 1. One hot encode existing values
+    one_hot_encoded = pd.get_dummies(filtered_df[filtered_df_column_name], columns=predefined_columns, prefix_sep=' = ',
+                                     prefix=filtered_df_column_name)
+
+    # 2. Add missing columns with all values equal to 0
     missing_cols = set([f'{filtered_df_column_name} = {column}' for column in predefined_columns]) - set(one_hot_encoded.columns)
     for col in missing_cols:
         one_hot_encoded[col] = 0
@@ -248,7 +264,8 @@ def one_hot_encoding(filtered_df, filtered_df_column_name, predefined_columns):
 
 def normalize_dataset(filtered_df):
     global is_training_model
-    if is_training_model:
+
+    if is_training_model:  # if training, not predicting
         filtered_df = filtered_df.drop(labels=['username', 'last_emotion', 'rated_emotion'], axis=1)
         filtered_df = merge_musics_va_to_dataset(filtered_df)
         filtered_df = filtered_df.drop(labels=['music_name'], axis=1)
@@ -257,47 +274,59 @@ def normalize_dataset(filtered_df):
         # TODO - mostrar erro
         return
 
+    mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+    mode_imputer = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
+
     def convert_hour_to_minutes(time):
         if time is None or time == '':
             return
+
         time = str(time)
         if time == 'nan':
             return
+
         hours, minutes, seconds = map(int, time.split(':'))
         hours_in_minutes = hours * 60
         total_minutes = hours_in_minutes + minutes
         return total_minutes
 
-    mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
-    mode_imputer = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
-
     def min_max_normalization(value, min, max):
         return (value - min) / (max - min)
 
     # --------------- Create a new normalized dataframe for model training ---------------
-    # --- Columns: listenedAt, sunset, sunrise ---
+
+    # --- Time columns: listenedAt, sunset, sunrise, day_length ---
     hours_columns = ['listenedAt', 'sunset', 'sunrise', 'day_length']
+
+    # TODO - remove ?
     # hours_scaler = MinMaxScaler(feature_range=(0, 1))
     # filtered_df[hours_columns] = hours_scaler.fit_transform(filtered_df[hours_columns])
+
+    # For every time column normalize with min max
     for column in hours_columns:
+        # 1. Convert time to minutes
         filtered_df[column] = filtered_df[column].apply(convert_hour_to_minutes)
+
+        # 2. Replace missing values with average
         filtered_df[column] = mean_imputer.fit_transform(filtered_df[column].array.reshape(-1, 1))
-        min_value = 0  # filtered_df[column].min()
-        max_value = 1440  # filtered_df[column].max()
-        filtered_df[column] = (filtered_df[column] - min_value) / (
-                    max_value - min_value)  # filtered_df[column].apply(normalize_value_hour) #
 
-    # --- Columns: initial_emotion, last_emotion, rated_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
+        # 3. Convert the range [0; 1440] to the range [0; 1]
+        min_value = 0
+        max_value = 1440  # 1440/60 = 24 hours
+        filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
+
+    # --- Column: isWorkDay - Map to binary (no = 0 : yes = 1) ---
+    filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
+
+    # --- Categorical columns: initial_emotion, idWeatherType, classWindSpeed, classPrecInt, timeOfDay ---
     categorical_columns = ['initial_emotion', 'idWeatherType',
-                           'classWindSpeed', 'classPrecInt', 'timeOfDay', 'isWorkDay']
+                           'classWindSpeed', 'classPrecInt', 'timeOfDay']
 
-    # Fill missing values with most frequent
+    # Replace missing values with most frequent
     mode_imputer.fit(filtered_df[categorical_columns])
     filtered_df[categorical_columns] = mode_imputer.transform(filtered_df[categorical_columns])
 
     # --- One Hot Encoding for categorical variables
-    categorical_columns.remove('isWorkDay')  # isWorkDay is already binary
-
     # idWeatherType one hot encoding
     filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'idWeatherType', ['No information', 'Clear sky',
                                                                                           'Partly cloudy', 'Sunny intervals',
@@ -312,7 +341,8 @@ def normalize_dataset(filtered_df):
                                                                                           'Showers and thunderstorms', 'Hail',
                                                                                           'Frost', 'Rain and thunderstorms',
                                                                                           'Convective clouds', 'Partly cloudy',
-                                                                                          'Fog', 'Cloudy', 'Snow showers', 'Rain and snow'])], axis=1)
+                                                                                          'Fog', 'Cloudy', 'Snow showers',
+                                                                                          'Rain and snow'])], axis=1)
 
     # classWindSpeed one hot encoding
     filtered_df = pd.concat([filtered_df, one_hot_encoding(filtered_df, 'classWindSpeed', ['Weak', 'Moderate', 'Strong',
@@ -328,73 +358,90 @@ def normalize_dataset(filtered_df):
 
     # initial_emotion one hot encoding
     filtered_df = pd.concat(
-        [filtered_df, one_hot_encoding(filtered_df, 'initial_emotion', ['angry', 'fear', 'disgust', 'sad', 'neural', 'surprise', 'happy'])], axis=1)
+        [filtered_df, one_hot_encoding(filtered_df, 'initial_emotion', ['angry', 'fear', 'disgust', 'sad', 'neural',
+                                                                        'surprise', 'happy'])], axis=1)
 
-    filtered_df = filtered_df.drop(labels=['idWeatherType', 'classWindSpeed', 'classPrecInt', 'timeOfDay', 'initial_emotion'], axis=1)
+    # drop labels used for one hot encoding, they will not be used anymore
+    filtered_df = filtered_df.drop(labels=['idWeatherType', 'classWindSpeed', 'classPrecInt', 'timeOfDay',
+                                           'initial_emotion'], axis=1)
 
-    # filtered_df = pd.get_dummies(filtered_df, columns=categorical_columns)
-
-    # Replacing missing values
+    # --- Numerical columns: tMin, tMax, temp, feels_like, min_temp, max_temp, cloud_pct, humidity, wind_speed,
+    # precipitaProb ---
     numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
                          'min_temp', 'max_temp', 'cloud_pct',
                          'humidity', 'wind_speed', 'precipitaProb']
+
+    # Replacing missing values with average
     mean_imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
-    filtered_df[numerical_columns] = mean_imputer.transform(
-        filtered_df[numerical_columns])  # replaces the missing values with the mean
+    filtered_df[numerical_columns] = mean_imputer.transform(filtered_df[numerical_columns])  # replaces
 
-    # def normalize_temperature(value):
-    #     min_value = -20
-    #     max_value = 50
-    #     return (value - min_value) / (max_value - min_value)
-
-    # --- Columns: tMin, tMax, temp, feels_like, min_temp, max_temp ---
+    # --- Temperature columns: tMin, tMax, temp, feels_like, min_temp, max_temp ---
     temperature_columns = ['tMin', 'tMax', 'temp', 'feels_like', 'min_temp', 'max_temp']
+
+    # For every temperature column normalize with min max
     for column in temperature_columns:
-        min_value = -20  # filtered_df[column].min()
-        max_value = 50  # filtered_df[column].max()
-        # filtered_df[column] = filtered_df[column].apply(normalize_temperature)
-        filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
+        # Convert the range [-20; 50] to the range [0; 1]
+        min_value = -20
+        max_value = 50
+        filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
+
+    # TODO - remover ?
     # temp_scaler = MinMaxScaler(feature_range=(0, 1))
     # filtered_df[temperature_columns] = temp_scaler.fit_transform(filtered_df[temperature_columns])
 
-    # def normalize_probability(value):
-    #     min_value = 0
-    #     max_value = 100
-    #     return (value - min_value) / (max_value - min_value)
+    # --- Percentage columns: cloud_pct, precipitaProb, humidity
+    percentage_columns = ['cloud_pct', 'precipitaProb', 'humidity']
 
-    from_0_to_100_values = ['cloud_pct', 'precipitaProb', 'humidity']
-    for column in from_0_to_100_values:
+    # For every percentage column normalize with min max
+    for column in percentage_columns:
+        # Convert the range [0; 100] to the range [0; 1]
         min_value = 0
         max_value = 100
-        filtered_df[column] = (filtered_df[column] - min_value) / (max_value - min_value)
-        # filtered_df[column] = filtered_df[column].apply(normalize_probability)
+        filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
 
+    # TODO - remover ?
     # percentage_scaler = MinMaxScaler(feature_range=(0, 1))
     # filtered_df[from_0_to_100_values] = percentage_scaler.fit_transform(filtered_df[from_0_to_100_values])
 
+    # TODO - remover ?
     # --- Column: wind_speed ---
     # wind_speed_scaler = MinMaxScaler(feature_range=(0, 1))
     # filtered_df['wind_speed'] = wind_speed_scaler.fit_transform(filtered_df[['wind_speed']])
 
+    # --- Column: wind_speed ---
     for index, row in filtered_df.iterrows():
-        filtered_df.at[index, 'wind_speed'] = min_max_normalization(row['wind_speed'], 0, 75)
+        # Convert the range [0; 75] to the range [0; 1]
+        min_value = 0
+        max_value = 75
+        filtered_df.at[index, 'wind_speed'] = min_max_normalization(row['wind_speed'], min_value, max_value)
 
+    # TODO - remover ?
     # Apply scaler
     # scaler = StandardScaler()
     # filtered_df[numerical_columns] = scaler.fit_transform(filtered_df[numerical_columns])
 
-    # --- Column: isWorkDay ---
-    filtered_df['isWorkDay'] = filtered_df['isWorkDay'].map({"Yes": 1, "No": 0})
-
+    # Convert first and last emotions from percentages to valence and arousal
     filtered_df = add_va_columns_from_emotions(filtered_df)
+
+    # VA columns: valence_last_emotion, arousal_last_emotion, valence_initial_emotion, arousal_initial_emotion
+    va_columns = ['valence_last_emotion', 'arousal_last_emotion', 'valence_initial_emotion', 'arousal_initial_emotion']
+
+    for column in va_columns:
+        # Convert the range [-1; 1] to the range [0; 1]
+        min_value = -1
+        max_value = 1
+        filtered_df[column] = min_max_normalization(column, min_value, max_value)
+
     filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
+
 
     numerical_columns.extend(['listenedAt', 'sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
                               'arousal_initial_emotion', 'valence_last_emotion', 'arousal_last_emotion'])
 
-    if is_training_model:
+    if is_training_model: # Add labels to train
         numerical_columns.extend(['music_valence', 'music_arousal'])
 
+    # TODO - remover ?
     # Discretize the numerical columns into categories
     # num_bins = 7  # Number of bins or categories
     # for col in numerical_columns:
@@ -1560,7 +1607,7 @@ class MusicsWindow(QMainWindow):
             self.nextWindow = TrainingModelScreen()
             self.nextWindow.show()
             self.close()
-            self.nextWindow.train_model()
+            self.nextWindow.train_model() # TODO - a interface não abre
 
 
 class MusicThread(QThread):
@@ -2316,42 +2363,38 @@ class ApplicationHomeScreen(QMainWindow):
         global goal_emotion
         global current_user_name
 
-        # Check if camera is avaliable
+        # Check if camera is available
         success, frames = self.emotion_thread.video.read()
         if not success:
             QMessageBox.information(
                 self, "Error", "Your camera is not properly working,\n please fix that and try again",
                 QMessageBox.Ok,
             )
-        else:
-            # 1 - Get initial emotion
-            # TODO - ficámos aqui :((
+        else:  # Camera is available
+            # 1. Capture initial emotion
             self.emotion_thread.capture_one_emotion()
-
             while not self.initial_emotion:
                 continue
 
-            # ---------- Round emotions values ----------
-            percentages = 'NA|'
+            # 2. Create percentages line
+            initial_emotion_percentages = 'NA|'
             for emotion in self.initial_emotion['emotion']:
-                percentages += str(round(self.initial_emotion['emotion'][emotion], 3))
+                initial_emotion_percentages += str(round(self.initial_emotion['emotion'][emotion], 3))
                 if emotion != 'neutral':  # last emotion
-                    percentages += '-'
+                    initial_emotion_percentages += '-'
                 else:
-                    percentages += '|'+self.initial_emotion['dominant_emotion']
+                    initial_emotion_percentages += '|'+self.initial_emotion['dominant_emotion']
 
             # initial_emotion_valence, initial_emotion_arousal = convert_emotions_to_va_values(initial_emotion)
             # initial_emotion_valence_converted = convert_to_new_range(-1, 1, 0, 1, initial_emotion_valence)
             # initial_emotion_arousal_converted = convert_to_new_range(-1, 1, 0, 1, initial_emotion_arousal)
 
-            # 2 - Get context
             current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
-
-            new_dict = {'listenedAt': current_time, 'instant_seconds|percentages|dominant_emotion': percentages,
+            new_dict = {'listenedAt': current_time, 'instant_seconds|percentages|dominant_emotion': initial_emotion_percentages,
                         'initial_emotion': self.initial_emotion['dominant_emotion']}
 
+            # 2 - Get context
             context_dictionary, number_of_headers = get_context()
-
             new_dict.update(context_dictionary)
 
             df = pd.DataFrame(new_dict, index=[0])
@@ -2573,29 +2616,29 @@ class TrainingModelScreen(QMainWindow):
 
     def train_model(self):
         global current_user_name
+
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
+            # 1. Get normalized dataset of username
             dataset = pd.read_csv(file)
 
-            # Labels
+            # 2. Get labels
             y = dataset[['music_valence', 'music_arousal']]
-            # Get context
+
+            # 3. Get context
             X = dataset.drop(labels=['music_valence', 'music_arousal'], axis=1)
 
+            # 4. Split the data and Train the model
             print("Train and test split...")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
             # Define the input shape
             input_shape = (X_train.shape[1],)  # Replace num_features with the actual number of input features
-
             # Define the inputs
             inputs = Input(shape=input_shape)
-
             # Define the hidden layer with one layer and 1 neuron
             hidden_layer = Dense(1, activation='sigmoid')(inputs)
-
             # Define the output layer with 2 neurons for valence and arousal
             outputs = Dense(2, activation='sigmoid')(hidden_layer)
-
             # Create the model
             model = Model(inputs=inputs, outputs=outputs)
 
@@ -2605,42 +2648,25 @@ class TrainingModelScreen(QMainWindow):
             model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
 
             # Train the model
-            epochs = 100  # Adjust the number of epochs as needed
-            batch_size = 16  # Adjust the batch size as needed
-
+            epochs = 100
+            batch_size = 16
             history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size)
 
             # Print the metric values for each epoch during training
-            print("Train results:")
+            print("Train results: ")
             for metric_name, metric_values in history.history.items():
                 print(metric_name + ":" + str(metric_values[-1]))
 
-            # Evaluate the model on the test data
+            # 5. Evaluate the model on the test data
             evaluation_results = model.evaluate(X_test, y_test)
 
             # Print the metric values during evaluation
-            print("Evaluation results:")
+            print("Evaluation results: ")
             for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
                 print(metric_name + ": " + str(metric_value))
 
-            # Make predictions on the test data
-            # predictions = model.predict(X_test)
-            #
-            # # Extract the predicted valence and arousal values
-            # predicted_valence = predictions[:, 0]
-            # predicted_arousal = predictions[:, 1]
-
-            # Save model
+            # 6. Save the model
             model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
-
-            # model_info = {
-            #     'model_architecture': model.to_json(),
-            #     'model_loss': model.loss,
-            #     'model_optimizer': model.optimizer.get_config(),
-            #     'model_weights': model.get_weights()
-            # }
-            #
-            # joblib.dump(model_info, model_file)
             model.save(model_file)
 
             global is_training_model
