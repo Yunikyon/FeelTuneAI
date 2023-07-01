@@ -1350,7 +1350,19 @@ class MusicsWindow(QMainWindow):
                         'initial_emotion': self.initial_emotion['dominant_emotion']}
 
             # 2 - Get context
-            context_dictionary, number_of_headers = get_context()
+            update_time = datetime.now()
+            global last_time_context_data_was_called
+            global last_context_data
+
+            # --- Update context if there is no context or if 20 minutes have elapsed since last time ---
+            if last_time_context_data_was_called == "" or (
+                    (update_time - last_time_context_data_was_called).total_seconds() > 1200):
+                context_dictionary, number_of_headers = get_context()
+                if number_of_headers == 18: # If there are 18 headers, then there was no API error from any of the APIs
+                    last_time_context_data_was_called = update_time
+                last_context_data = context_dictionary
+            else:
+                context_dictionary = last_context_data
             new_dict.update(context_dictionary)
 
             # 3. Get normalized dataframe
