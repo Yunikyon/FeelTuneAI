@@ -1780,7 +1780,6 @@ class MusicThread(QThread):
 
         # ---------- Finished Music ----------
         self.finished_music_signal.emit()
-        self.pause_music()
 
         pass
 
