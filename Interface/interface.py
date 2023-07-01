@@ -16,6 +16,7 @@ import tf as tf
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import NearestNeighbors
 from sklearn.neural_network import MLPRegressor
 from mutagen.mp3 import MP3
 from keras.models import Model
@@ -55,6 +56,8 @@ new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion
               'rated_emotion': '', 'instant_seconds|percentages|dominant_emotion': ''}
 
 goal_emotion = None
+valence_arousal_pairs = None
+application_music_names = None
 
 is_training_model = False
 
@@ -645,6 +648,7 @@ class MusicsWindow(QMainWindow):
         self.setMinimumSize(QSize(1200, 750))
 
         self.nextWindow = None
+        self.initial_emotion = None
 
         global is_in_building_dataset_phase
         global current_user_bpd_progress
@@ -709,6 +713,7 @@ class MusicsWindow(QMainWindow):
 
         # Emotion Thread Initialization
         self.emotion_thread = EmotionsThread()
+        self.emotion_thread.captured_one_emotion.connect(self.emotion_captured)
 
         # Base Layout
         base_layout = QVBoxLayout()
@@ -1307,7 +1312,74 @@ class MusicsWindow(QMainWindow):
             self.pause_button.setProperty("icon_name", "pause")
             self.pause_button.setIconSize(QSize(30, 30))
 
+    def emotion_captured(self, result):
+        self.initial_emotion = result
+        return
 
+    def choose_next_application_music(self):
+        global valence_arousal_pairs
+        global application_music_names
+
+        # Check if camera is available
+        success, frames = self.emotion_thread.video.read()
+        if not success:
+            QMessageBox.information(
+                self, "Error", "Your camera is not properly working,\n please fix that and try again",
+                QMessageBox.Ok,
+            )
+
+            return None
+        else:  # Camera is available
+            # 1. Capture initial emotion
+            self.emotion_thread.capture_one_emotion()
+            while not self.initial_emotion:
+                continue
+
+            # 2. Create percentages line
+            initial_emotion_percentages = 'NA|'
+            for emotion in self.initial_emotion['emotion']:
+                initial_emotion_percentages += str(round(self.initial_emotion['emotion'][emotion], 3))
+                if emotion != 'neutral':  # last emotion
+                    initial_emotion_percentages += '-'
+                else:
+                    initial_emotion_percentages += '|' + self.initial_emotion['dominant_emotion']
+
+            current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
+            new_dict = {'listenedAt': current_time,
+                        'instant_seconds|percentages|dominant_emotion': initial_emotion_percentages,
+                        'initial_emotion': self.initial_emotion['dominant_emotion']}
+
+            # 2 - Get context
+            context_dictionary, number_of_headers = get_context()
+            new_dict.update(context_dictionary)
+
+            # 3. Get normalized dataframe
+            df = pd.DataFrame(new_dict, index=[0])
+            filtered_df = normalize_dataset(df)
+
+            # 4. Predict valence and arousal
+            model = keras.models.load_model(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5')
+            predictions = model.predict(filtered_df)[0]
+
+            # Extract the predicted valence and arousal values
+            predicted_valence = round(convert_to_new_range(0, 1, -1, 1, predictions[0]), 3)
+            predicted_arousal = round(convert_to_new_range(0, 1, -1, 1, predictions[1]), 3)
+
+            print("Valence: " + str(predicted_valence) + " Arousal: " + str(predicted_arousal))
+
+            # 5. Calculate distance between predicted valence and arousal and the pair's valence and arousal
+            # Create a NearestNeighbors model and fit your data
+            nbrs = NearestNeighbors(n_neighbors=1).fit(valence_arousal_pairs)
+            # Define your new point
+            new_point = [predicted_valence, predicted_arousal]
+            # Find the index of the closest point to the new point
+            # TODO - ficámos aqui :D
+            distances, indices = nbrs.kneighbors([new_point])
+
+            # 6. Get name of the music to play -> music with the minimum distance
+            music_name = application_music_names[indices[0][0]]
+
+            return music_name
 
     def save_bdp_progress_to_csv(self):
         global current_user_name
@@ -1580,7 +1652,20 @@ class MusicsWindow(QMainWindow):
                 self.switch_layout()
             else:
                 self.emotion_thread.stop_emotions()
-                # TODO - ir mudando a diretoria se for personalized ou não
+
+                # Choose next music
+                music_name = self.choose_next_application_music()
+
+                if not music_name:
+                    # TODO - mostrar erro
+                    return
+
+                music_full_path = self.music_thread.set_music(music_name)
+
+                # Set the duration of the music using Mutagen
+                audio = MP3(music_full_path)
+                self.music_progress.set_duration(int(audio.info.length))
+
                 self.music_thread.start()
 
     def finished_btn_clicked(self):
@@ -2246,11 +2331,6 @@ class ApplicationHomeScreen(QMainWindow):
 
         global current_user_name
 
-        # Emotion Thread Initialization
-        self.emotion_thread = EmotionsThread()
-        self.emotion_thread.captured_one_emotion.connect(self.emotion_captured)
-        self.initial_emotion = None
-
         # Base Layout
         base_layout = QVBoxLayout()
         base_layout.setContentsMargins(10, 20, 10, 10)
@@ -2368,65 +2448,42 @@ class ApplicationHomeScreen(QMainWindow):
         global goal_emotion
         global current_user_name
 
-        # Check if camera is available
-        success, frames = self.emotion_thread.video.read()
-        if not success:
-            QMessageBox.information(
-                self, "Error", "Your camera is not properly working,\n please fix that and try again",
-                QMessageBox.Ok,
-            )
-        else:  # Camera is available
-            # 1. Capture initial emotion
-            self.emotion_thread.capture_one_emotion()
-            while not self.initial_emotion:
-                continue
+        self.nextWindow = MusicsWindow()
+        self.nextWindow.music_playing = True
+        self.nextWindow.switch_layout()
 
-            # 2. Create percentages line
-            initial_emotion_percentages = 'NA|'
-            for emotion in self.initial_emotion['emotion']:
-                initial_emotion_percentages += str(round(self.initial_emotion['emotion'][emotion], 3))
-                if emotion != 'neutral':  # last emotion
-                    initial_emotion_percentages += '-'
-                else:
-                    initial_emotion_percentages += '|'+self.initial_emotion['dominant_emotion']
+        # Get every valence and arousal pairs from ApplicationMusics
+        delimiter = '~~~'
+        with open('../applications_musics_va.csv', 'r') as file_obj:
+            try:
+                musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
+            except pd.errors.ParserError:
+                musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
 
-            current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
-            new_dict = {'listenedAt': current_time, 'instant_seconds|percentages|dominant_emotion': initial_emotion_percentages,
-                        'initial_emotion': self.initial_emotion['dominant_emotion']}
+        if musics_df is None:
+            # TODO - mostrar erro
+            return
 
-            # 2 - Get context
-            context_dictionary, number_of_headers = get_context()
-            new_dict.update(context_dictionary)
+        global valence_arousal_pairs
+        global application_music_names
 
-            df = pd.DataFrame(new_dict, index=[0])
+        valence_arousal_pairs = musics_df[['music_valence', 'music_arousal']]
+        application_music_names = musics_df['music_name']
 
-            filtered_df = normalize_dataset(df)
+        music_name = self.nextWindow.choose_next_application_music()
 
-            # Make predictions on the test data
-            model = keras.models.load_model(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5')
+        if not music_name:
+            # TODO - mostrar erro
+            return
 
-            predictions = model.predict(filtered_df)[0]
+        music_full_path = self.nextWindow.music_thread.set_music(music_name)
 
-            # Extract the predicted valence and arousal values
-            predicted_valence = round(convert_to_new_range(0, 1, -1, 1, predictions[0]), 3)
-            predicted_arousal = round(convert_to_new_range(0, 1, -1, 1, predictions[1]), 3)
+        # Set the duration of the music using Mutagen
+        audio = MP3(music_full_path)
+        self.nextWindow.music_progress.set_duration(int(audio.info.length))
 
-            print("Valence: " + str(predicted_valence) + " Arousal: " + str(predicted_arousal))
-
-            self.nextWindow = MusicsWindow()
-            self.nextWindow.music_playing = True
-            self.nextWindow.switch_layout()
-
-            # TODO - atribuir música
-            music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
-
-            new_record['music_name'] = music_name
-            self.nextWindow.show()
-            self.close()
-
-    def emotion_captured(self, result):
-        self.initial_emotion = result
-        return
+        self.nextWindow.show()
+        self.close()
 
 
 
@@ -2694,7 +2751,7 @@ class TrainingModelScreen(QMainWindow):
 
 def main():
     # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
-    # predict_music_directory_emotions('../BuildingDatasetPhaseMusics', '../building_dataset_phase_musics_va')
+    # predict_music_directory_emotions('../ApplicationMusics', '../applications_musics_va')
     app = QApplication([])
     window = LoginWindow()
     # window = TrainingModelScreen()
