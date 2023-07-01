@@ -1688,7 +1688,7 @@ class MusicsWindow(QMainWindow):
         with open('../dataset_for_model_training.csv', 'r') as file_obj:
             dataset = pd.read_csv(file_obj)
             df = pd.DataFrame(dataset) # So that we don't change the original df (and filtered_df can't be a view)
-            # filtered_df = filtered_df[filtered_df['username'] == current_user_name] # TODO - descomentar essa linha
+            filtered_df = filtered_df[filtered_df['username'] == current_user_name]
 
             # Normalize dataframe
             filtered_df = normalize_dataset(df)
@@ -1763,11 +1763,9 @@ class MusicThread(QThread):
             self.set_volume(0.2)
         pygame.mixer.music.play()  # plays music
 
-        # ---------- Waits for the music to end ---------- # TODO - descomentar para versão final, só queremos testar agora com 30 segundos
-        # while pygame.mixer.music.get_busy() or self.music_is_paused:
-        #     pygame.time.wait(100)
-
-        pygame.time.wait(30000)
+        # ---------- Waits for the music to end ----------
+        while pygame.mixer.music.get_busy() or self.music_is_paused:
+            pygame.time.wait(100)
 
         # ---------- Finished Music ----------
         self.finished_music_signal.emit()
