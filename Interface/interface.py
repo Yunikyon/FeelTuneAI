@@ -246,8 +246,8 @@ def add_va_columns_from_emotions(dataset):
                 dataset.at[index, 'arousal_last_emotion'] = convert_emotions_to_va_values(last_emotion)
 
             # 3. Apply rated emotion weight - TODO -> fazer para todos os valores - vai dar erro agora, tenho que fazer o split
-            dataset.at[index, 'valence_last_emotion'] = (dataset.at[index, 'valence_last_emotion'] + rated_emotion[0]) / 2
-            dataset.at[index, 'arousal_last_emotion'] = (dataset.at[index, 'arousal_last_emotion'] + rated_emotion[1]) / 2
+            dataset.at[index, 'valence_last_emotion'] = np.mean(np.concatenate((dataset.at[index, 'valence_last_emotion'], rated_emotion[0])))
+            dataset.at[index, 'arousal_last_emotion'] = np.mean(np.concatenate((dataset.at[index, 'arousal_last_emotion'], rated_emotion[1])))
         else:  # Goal emotion
             global goal_emotion
             dataset.at[index, 'valence_last_emotion'] = goal_emotion[0]
@@ -2760,7 +2760,6 @@ class TrainingModelScreen(QMainWindow):
             self.switch_layout()
 
     def finished_train_btn_clicked(self):
-        # TODO - mudar para o ecrã inicial
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
         self.close()
