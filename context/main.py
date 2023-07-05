@@ -30,7 +30,7 @@ def execute():
     df['distance'] = df.apply(lambda row: geodesic((latitude, longitude), (row['latitude'], row['longitude'])).km, axis=1) # km -> to return in km, axis = 1 -> apply to each row
     closest_city = df.loc[df['distance'].idxmin()]['local']
     print(f"Closest city: {closest_city}")
-    df_mylocation = df[df['local'] == 'Leiria']
+    df_mylocation = df[df['local'] == closest_city]
 
     values = []
     for index, row in df_mylocation.iterrows():
@@ -52,7 +52,7 @@ def execute():
                 new_record['day_length'] = "N/A"
 
         new_record['timeOfDay'] = transform.transform_hours_into_day_classification(new_record['currentTime'])
-        new_record['isWorkDay'] = transform.get_is_work_day(new_record['currentTime'])
+        new_record['isWorkDay'] = transform.get_is_work_day(new_record['currentTime'], closest_city)
 
         responseWeatherApi = extract.getJsonResponseFromUrl(
             f"https://api.api-ninjas.com/v1/weather?lat={row['latitude']}&lon={row['longitude']}",

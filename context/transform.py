@@ -61,7 +61,7 @@ def transform_hours_into_day_classification(date):
 '''
 
 
-def get_is_work_day(date):
+def get_is_work_day(date, city):
     if date is None:
         return None
     if "T" not in date:
@@ -75,10 +75,15 @@ def get_is_work_day(date):
     d, m, y = day.day, day.month, day.year
     result = extract.getJsonResponseFromUrl(f"https://holidays.abstractapi.com/v1?api_key={api_key}&country=PT&day={d}&month={m}&year={y}")
     if result is None:
-        return 'No'
+        return 'Yes'
     result = result.json()
     # If there is a holiday, then the response is not an empty array
     if len(result) != 0:
-        return 'No'
+        for item in result:
+            if item['type'] == 'National':
+                return 'No'
+            if item['type'] == 'Local holiday':
+                if city in item['location']:
+                    return 'No'
     return 'Yes'
 
