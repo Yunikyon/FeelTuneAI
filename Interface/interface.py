@@ -52,10 +52,11 @@ last_time_context_data_was_called = ""
 # dataset for model training variables
 data = []
 current_music_emotions = ''
-new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '',
-              'rated_emotion': '', 'instant_seconds|percentages|dominant_emotion': ''}
+new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '', 'rated_emotion': '',
+              'instant_seconds|percentages|dominant_emotion': ''}
 
 goal_emotion = None
+rated_emotion = None
 valence_arousal_pairs = None
 application_music_names = None
 
@@ -65,7 +66,7 @@ def reset_values(record):
     record['initial_emotion'] = ''
     record['music_name'] = ''
     record['average_emotion'] = ''
-    record['rated_emotion'] = ''
+
     return record
 
 
@@ -228,6 +229,7 @@ def merge_musics_va_to_dataset(dataset):
 
 def add_va_columns_from_emotions(dataset):
     global is_training_model
+    global rated_emotion
 
     for index, row in dataset.iterrows():
         # Example -> 6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
@@ -242,6 +244,10 @@ def add_va_columns_from_emotions(dataset):
             # 2. Convert last emotion's percentages to valence and arousal
             dataset.at[index, 'valence_last_emotion'],\
                 dataset.at[index, 'arousal_last_emotion'] = convert_emotions_to_va_values(last_emotion)
+
+            # 3. Apply rated emotion weight - TODO -> fazer para todos os valores - vai dar erro agora, tenho que fazer o split
+            dataset.at[index, 'valence_last_emotion'] = np.mean(np.concatenate((dataset.at[index, 'valence_last_emotion'], rated_emotion[0])))
+            dataset.at[index, 'arousal_last_emotion'] = np.mean(np.concatenate((dataset.at[index, 'arousal_last_emotion'], rated_emotion[1])))
         else:  # Goal emotion
             global goal_emotion
             dataset.at[index, 'valence_last_emotion'] = goal_emotion[0]
@@ -776,6 +782,9 @@ class MusicsWindow(QMainWindow):
         blank_space_one.setMaximumSize(10, 30)
         base_layout.addWidget(blank_space_one)
 
+        # --- Animation widget
+        animation_layout = QVBoxLayout()
+        animation_layout.setAlignment(Qt.AlignHCenter)
 
         if is_in_building_dataset_phase:
             # Training Progress Slider
@@ -794,19 +803,19 @@ class MusicsWindow(QMainWindow):
             slider_blank_space.setMaximumSize(100, 30)
             slider_line_layout.addWidget(slider_blank_space)
 
-            self.slider_value_label = QLineEdit(str(current_user_bpd_progress) + "%")
-            self.slider_value_label.setReadOnly(True)
+            self.slider_value_label_animation = QLineEdit(str(current_user_bpd_progress) + "%")
+            self.slider_value_label_animation.setReadOnly(True)
 
-            slider_font = self.slider_value_label.font()
+            slider_font = self.slider_value_label_animation.font()
             slider_font.setPointSize(13)
-            self.slider_value_label.setFont(slider_font)
+            self.slider_value_label_animation.setFont(slider_font)
 
-            self.slider_value_label.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
-            self.slider_value_label.setMaximumSize(810, 50)
-            self.slider_value_label.setMinimumSize(70, 50)
+            self.slider_value_label_animation.setStyleSheet("* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
+            self.slider_value_label_animation.setMaximumSize(810, 50)
+            self.slider_value_label_animation.setMinimumSize(70, 50)
 
-            self.slider_value_label.textChanged.connect(self.move_slider_label)
-            slider_line_layout.addWidget(self.slider_value_label)
+            self.slider_value_label_animation.textChanged.connect(self.move_slider_label)
+            slider_line_layout.addWidget(self.slider_value_label_animation)
 
             slider_line_widget = QWidget()
             slider_line_widget.setLayout(slider_line_layout)
@@ -826,13 +835,13 @@ class MusicsWindow(QMainWindow):
             progress_label.setMinimumSize(100, 60)
             progress_line_layout.addWidget(progress_label)
 
-            self.progress_slider = QSlider(Qt.Horizontal)
-            self.progress_slider.setMinimum(0)
-            self.progress_slider.setValue(current_user_bpd_progress)
-            self.progress_slider.setMaximum(100)
+            self.progress_slider_animation = QSlider(Qt.Horizontal)
+            self.progress_slider_animation.setMinimum(0)
+            self.progress_slider_animation.setValue(current_user_bpd_progress)
+            self.progress_slider_animation.setMaximum(100)
             # self.progress_slider.setSingleStep(round(100/self.music_files_length))
-            self.progress_slider.setMaximumSize(800, 40)
-            self.progress_slider.setStyleSheet("QSlider::groove:horizontal "
+            self.progress_slider_animation.setMaximumSize(800, 40)
+            self.progress_slider_animation.setStyleSheet("QSlider::groove:horizontal "
                                           "{border: 1px solid #999999; height: 8px;"
                                             "margin: 2px 0;} "
                                           "QSlider::handle:horizontal "
@@ -841,13 +850,13 @@ class MusicsWindow(QMainWindow):
                                             "margin: -5px 0; border-radius: 3px;}"
                                           "QSlider::add-page:horizontal {background: white}"
                                           "QSlider::sub-page:horizontal {background: #ffd7ab}")
-            self.progress_slider.valueChanged.connect(self.slider_value_changed)
-            self.progress_slider.setEnabled(False)
-            progress_line_layout.addWidget(self.progress_slider)
+            self.progress_slider_animation.valueChanged.connect(self.slider_value_changed)
+            self.progress_slider_animation.setEnabled(False)
+            progress_line_layout.addWidget(self.progress_slider_animation)
 
-            self.slider_value_label.setMinimumSize(self.progress_slider.width()+100, 30)
+            self.slider_value_label_animation.setMinimumSize(self.progress_slider_animation.width()+100, 30)
 
-            self.slider_value_label.setContentsMargins(int(current_user_bpd_progress * 7.7), 10, 0, 0)
+            self.slider_value_label_animation.setContentsMargins(int(current_user_bpd_progress * 7.7), 10, 0, 0)
 
             progress_line_widget = QWidget()
             progress_line_widget.setLayout(progress_line_layout)
@@ -859,11 +868,7 @@ class MusicsWindow(QMainWindow):
             progress_layout_vertical_widget.setMaximumSize(2000, 110)
             progress_layout_vertical_widget.setLayout(progress_layout_vertical)
 
-            base_layout.addWidget(progress_layout_vertical_widget)
-
-        # --- Animation widget
-        animation_layout = QVBoxLayout()
-        animation_layout.setAlignment(Qt.AlignHCenter)
+            animation_layout.addWidget(progress_layout_vertical_widget)
 
         # Circles animation
         circle_layout = QHBoxLayout()
@@ -1018,12 +1023,6 @@ class MusicsWindow(QMainWindow):
         rating_layout = QVBoxLayout()
         rating_layout.setAlignment(Qt.AlignHCenter)
 
-        # Blank space two
-        blank_space_two = QLabel()
-        blank_space_two.setMaximumSize(10, 30)
-        # base_layout.addWidget(blank_space_two)
-        rating_layout.addWidget(blank_space_two)
-
         rate_layout = QHBoxLayout()
         rate_layout.setAlignment(Qt.AlignHCenter)
 
@@ -1035,126 +1034,47 @@ class MusicsWindow(QMainWindow):
 
         rate_widget = QWidget()
         rate_widget.setLayout(rate_layout)
-        rate_widget.setMaximumSize(2000, 80)
+        rate_widget.setMaximumSize(2000, 60)
         rating_layout.addWidget(rate_widget)
-        # base_layout.addWidget(rate_widget)
 
         # Blank space three
         blank_space_three = QLabel()
         blank_space_three.setMaximumSize(10, 30)
         rating_layout.addWidget(blank_space_three)
-        # base_layout.addWidget(blank_space_three)
 
-        # First Line of buttons
-        first_line_layout = QHBoxLayout()
-        first_line_layout.setAlignment(Qt.AlignHCenter)
-        first_line_layout.setSpacing(30)
-        first_line_layout.setContentsMargins(0, 0, 0, 0)
+        # Quadrants
+        quadrants_layout = QHBoxLayout()
+        quadrants_layout.setAlignment(Qt.AlignHCenter)
 
-        # Angry button
-        angry_button = QPushButton("Angry")
-        angry_button.setMinimumSize(150, 80)
-        angry_font = angry_button.font()
-        angry_font.setPixelSize(25)
-        angry_button.setFont(angry_font)
-        angry_button.setCursor(QCursor(Qt.PointingHandCursor))
-        angry_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        angry_button.clicked.connect(self.angry_button_clicked)
-        first_line_layout.addWidget(angry_button)
+        quadrants = QuadrantWidget()
+        quadrants.setMaximumSize(400, 400)
+        quadrants.setMinimumSize(400, 400)
+        quadrants_layout.addWidget(quadrants)
 
-        # Disgust button
-        disgust_button = QPushButton("Disgust")
-        disgust_button.setMinimumSize(150, 80)
-        disgust_font = disgust_button.font()
-        disgust_font.setPixelSize(25)
-        disgust_button.setFont(disgust_font)
-        disgust_button.setCursor(QCursor(Qt.PointingHandCursor))
-        disgust_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        disgust_button.clicked.connect(self.disgust_button_clicked)
-        first_line_layout.addWidget(disgust_button)
+        quadrants_widget = QWidget()
+        quadrants_widget.setLayout(quadrants_layout)
+        rating_layout.addWidget(quadrants_widget)
 
-        # Fear button
-        fear_button = QPushButton("Fear")
-        fear_button.setMinimumSize(150, 80)
-        fear_font = fear_button.font()
-        fear_font.setPixelSize(25)
-        fear_button.setFont(fear_font)
-        fear_button.setCursor(QCursor(Qt.PointingHandCursor))
-        fear_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        fear_button.clicked.connect(self.fear_button_clicked)
-        first_line_layout.addWidget(fear_button)
+        # Submit emotion button
+        submit_layout = QHBoxLayout()
+        submit_layout.setAlignment(Qt.AlignHCenter)
 
-        # Sad button
-        sad_button = QPushButton("Sad")
-        sad_button.setMinimumSize(150, 80)
-        sad_font = sad_button.font()
-        sad_font.setPixelSize(25)
-        sad_button.setFont(sad_font)
-        sad_button.setCursor(QCursor(Qt.PointingHandCursor))
-        sad_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        sad_button.clicked.connect(self.sad_button_clicked)
-        first_line_layout.addWidget(sad_button)
+        submit_btn = QPushButton("Submit")
+        submit_font = submit_btn.font()
+        submit_font.setPointSize(20)
+        submit_btn.setFont(submit_font)
+        submit_btn.setMinimumSize(50, 50)
+        submit_btn.setIcon(QIcon('./images/tune_in_btn.png'))
+        submit_btn.setIconSize(QSize(50, 50))
+        submit_btn.setFlat(True)
+        submit_btn.setStyleSheet("QPushButton { background-color: transparent;}")
+        submit_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        submit_btn.clicked.connect(self.emotion_rated)
+        submit_layout.addWidget(submit_btn)
 
-        first_line_widget = QWidget()
-        first_line_widget.setLayout(first_line_layout)
-        first_line_widget.setMaximumSize(2000, 80)
-        rating_layout.addWidget(first_line_widget)
-
-        # Blank space four
-        blank_space_four = QLabel()
-        blank_space_four.setMaximumSize(10, 30)
-        rating_layout.addWidget(blank_space_four)
-
-        # Second Line of buttons
-        second_line_layout = QHBoxLayout()
-        second_line_layout.setAlignment(Qt.AlignHCenter)
-        second_line_layout.setSpacing(30)
-        second_line_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Neutral button
-        neutral_button = QPushButton("Neutral")
-        neutral_button.setMinimumSize(150, 80)
-        neutral_font = neutral_button.font()
-        neutral_font.setPixelSize(25)
-        neutral_button.setFont(neutral_font)
-        neutral_button.setCursor(QCursor(Qt.PointingHandCursor))
-        neutral_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        neutral_button.clicked.connect(self.neutral_button_clicked)
-        second_line_layout.addWidget(neutral_button)
-
-        # Surprised button
-        surprised_button = QPushButton("Surprised")
-        surprised_button.setMinimumSize(150, 80)
-        surprised_font = surprised_button.font()
-        surprised_font.setPixelSize(25)
-        surprised_button.setFont(surprised_font)
-        surprised_button.setCursor(QCursor(Qt.PointingHandCursor))
-        surprised_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        surprised_button.clicked.connect(self.surprise_button_clicked)
-        second_line_layout.addWidget(surprised_button)
-
-        # Happy button
-        happy_button = QPushButton("Happy")
-        happy_button.setMinimumSize(150, 80)
-        happy_font = happy_button.font()
-        happy_font.setPixelSize(25)
-        happy_button.setFont(happy_font)
-        happy_button.setCursor(QCursor(Qt.PointingHandCursor))
-        happy_button.setStyleSheet(
-            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
-        happy_button.clicked.connect(self.happy_button_clicked)
-        second_line_layout.addWidget(happy_button)
-
-        second_line_widget = QWidget()
-        second_line_widget.setLayout(second_line_layout)
-        second_line_widget.setMaximumSize(2000, 80)
-        rating_layout.addWidget(second_line_widget)
+        submit_widget = QWidget()
+        submit_widget.setLayout(submit_layout)
+        rating_layout.addWidget(submit_widget)
 
         # Blank space five
         blank_space_five = QLabel()
@@ -1169,6 +1089,91 @@ class MusicsWindow(QMainWindow):
         # --- Play Next Music widget
         play_next_layout = QVBoxLayout()
         play_next_layout.setAlignment(Qt.AlignHCenter)
+
+        if is_in_building_dataset_phase:
+            # Training Progress Slider
+            progress_layout_vertical = QVBoxLayout()
+            progress_layout_vertical.setAlignment(Qt.AlignHCenter)
+
+            # Slider value
+            slider_line_layout = QHBoxLayout()
+            slider_line_layout.setContentsMargins(0, 0, 0, 0)
+            slider_line_layout.setSpacing(20)
+
+            slider_blank_space = QLabel()
+            slider_blank_space_font = slider_blank_space.font()
+            slider_blank_space_font.setPointSize(15)
+            slider_blank_space.setFont(slider_blank_space_font)
+            slider_blank_space.setMaximumSize(100, 30)
+            slider_line_layout.addWidget(slider_blank_space)
+
+            self.slider_value_label_play_next = QLineEdit(str(current_user_bpd_progress) + "%")
+            self.slider_value_label_play_next.setReadOnly(True)
+
+            slider_font = self.slider_value_label_play_next.font()
+            slider_font.setPointSize(13)
+            self.slider_value_label_play_next.setFont(slider_font)
+
+            self.slider_value_label_play_next.setStyleSheet(
+                "* { background-color: rgba(0, 0, 0, 0); border: rgba(0, 0, 0, 0); z-index: 1}");
+            self.slider_value_label_play_next.setMaximumSize(810, 50)
+            self.slider_value_label_play_next.setMinimumSize(70, 50)
+
+            self.slider_value_label_play_next.textChanged.connect(self.move_slider_label)
+            slider_line_layout.addWidget(self.slider_value_label_play_next)
+
+            slider_line_widget = QWidget()
+            slider_line_widget.setLayout(slider_line_layout)
+            slider_line_widget.setMaximumSize(1000, 30)
+            slider_line_widget.setMinimumSize(1000, 30)
+            progress_layout_vertical.addWidget(slider_line_widget)
+
+            progress_line_layout = QHBoxLayout()
+            progress_line_layout.setContentsMargins(0, 0, 0, 0)
+            progress_line_layout.setSpacing(20)
+
+            progress_label = QLabel("Progress")
+            progress_font = progress_label.font()
+            progress_font.setPointSize(15)
+            progress_label.setFont(progress_font)
+            progress_label.setMaximumSize(100, 60)
+            progress_label.setMinimumSize(100, 60)
+            progress_line_layout.addWidget(progress_label)
+
+            self.progress_slider_play_next = QSlider(Qt.Horizontal)
+            self.progress_slider_play_next.setMinimum(0)
+            self.progress_slider_play_next.setValue(current_user_bpd_progress)
+            self.progress_slider_play_next.setMaximum(100)
+            # self.progress_slider.setSingleStep(round(100/self.music_files_length))
+            self.progress_slider_play_next.setMaximumSize(800, 40)
+            self.progress_slider_play_next.setStyleSheet("QSlider::groove:horizontal "
+                                                         "{border: 1px solid #999999; height: 8px;"
+                                                         "margin: 2px 0;} "
+                                                         "QSlider::handle:horizontal "
+                                                         "{background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f7c997, stop:1 #ffffff);"
+                                                         "border: 1px solid #f7c997; width: 0px;"
+                                                         "margin: -5px 0; border-radius: 3px;}"
+                                                         "QSlider::add-page:horizontal {background: white}"
+                                                         "QSlider::sub-page:horizontal {background: #ffd7ab}")
+            self.progress_slider_play_next.valueChanged.connect(self.slider_value_changed)
+            self.progress_slider_play_next.setEnabled(False)
+            progress_line_layout.addWidget(self.progress_slider_play_next)
+
+            self.slider_value_label_play_next.setMinimumSize(self.progress_slider_play_next.width() + 100, 30)
+
+            self.slider_value_label_play_next.setContentsMargins(int(current_user_bpd_progress * 7.7), 10, 0, 0)
+
+            progress_line_widget = QWidget()
+            progress_line_widget.setLayout(progress_line_layout)
+            progress_line_widget.setMaximumSize(1000, 80)
+            progress_line_widget.setMinimumSize(1000, 80)
+
+            progress_layout_vertical.addWidget(progress_line_widget)
+            progress_layout_vertical_widget = QWidget()
+            progress_layout_vertical_widget.setMaximumSize(2000, 110)
+            progress_layout_vertical_widget.setLayout(progress_layout_vertical)
+
+            play_next_layout.addWidget(progress_layout_vertical_widget)
 
         # Blank space
         blank_space = QLabel()
@@ -1280,18 +1285,20 @@ class MusicsWindow(QMainWindow):
         # --- End of Play Next Music widget
 
         base_layout.addWidget(self.stacked_widget)
-        self.switch_layout()
+        # self.switch_layout()
 
         base_widget = Color('#f5e6d0')
         base_widget.setLayout(base_layout)
         self.setCentralWidget(base_widget)
 
     def slider_value_changed(self, value):
-        self.slider_value = value
-        self.slider_value_label.setText(str(value)+"%")
+        self.slider_value_label_animation.setText(str(value)+"%")
+        self.slider_value_label_play_next.setText(str(value)+"%")
+
     def move_slider_label(self, value):
         value_number = int(strip(value.split('%')[0]).flat[0])
-        self.slider_value_label.setContentsMargins(int((self.slider_value_label.width() * value_number)/100)-20, 13, 0, 0)
+        self.slider_value_label_animation.setContentsMargins(int((self.slider_value_label_animation.width() * value_number)/100)-20, 13, 0, 0)
+        self.slider_value_label_play_next.setContentsMargins(int((self.slider_value_label_play_next.width() * value_number)/100)-20, 13, 0, 0)
 
     def volume_slider_value_changed(self, value):
         self.music_thread.set_volume(value/100)
@@ -1552,7 +1559,8 @@ class MusicsWindow(QMainWindow):
                 else: # Finished BDP Phase
                     self.stacked_widget.setCurrentIndex(3)
 
-    def emotion_rated(self, emotion):
+    def emotion_rated(self):
+        global rated_emotion
         global data
         global new_record
         global musics_listened_by_current_user
@@ -1564,7 +1572,8 @@ class MusicsWindow(QMainWindow):
         musics_listened_by_current_user.append(new_record['music_name'])
         musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
-        self.progress_slider.setValue(current_user_bpd_progress)
+        self.progress_slider_animation.setValue(current_user_bpd_progress)
+        self.progress_slider_play_next.setValue(current_user_bpd_progress)
         self.switch_layout()
         current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
 
@@ -1573,7 +1582,7 @@ class MusicsWindow(QMainWindow):
         new_dict = {'username': current_user_name.lower(), 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
                     'music_name': new_record['music_name'],
                     'last_emotion': new_record['last_emotion'],
-                    'rated_emotion': emotion,
+                    'rated_emotion': str(rated_emotion[0])+'|'+str(rated_emotion[1]),
                     'instant_seconds|percentages|dominant_emotion': new_record['instant_seconds|percentages|dominant_emotion']
                     }
 
@@ -1587,7 +1596,7 @@ class MusicsWindow(QMainWindow):
             if number_of_headers == 18:
                 last_time_context_data_was_called = update_time
             last_context_data = context_dictionary
-        else :
+        else:
             context_dictionary = last_context_data
 
         new_dict.update(context_dictionary)
@@ -1596,26 +1605,26 @@ class MusicsWindow(QMainWindow):
 
         self.setDisabled(False)
 
-    def angry_button_clicked(self):
-        self.emotion_rated("angry")
-
-    def disgust_button_clicked(self):
-        self.emotion_rated("disgust")
-
-    def fear_button_clicked(self):
-        self.emotion_rated("fear")
-
-    def sad_button_clicked(self):
-        self.emotion_rated("sad")
-
-    def neutral_button_clicked(self):
-        self.emotion_rated("neutral")
-
-    def surprise_button_clicked(self):
-        self.emotion_rated("surprise")
-
-    def happy_button_clicked(self):
-        self.emotion_rated("happy")
+    # def angry_button_clicked(self):
+    #     self.emotion_rated("angry")
+    #
+    # def disgust_button_clicked(self):
+    #     self.emotion_rated("disgust")
+    #
+    # def fear_button_clicked(self):
+    #     self.emotion_rated("fear")
+    #
+    # def sad_button_clicked(self):
+    #     self.emotion_rated("sad")
+    #
+    # def neutral_button_clicked(self):
+    #     self.emotion_rated("neutral")
+    #
+    # def surprise_button_clicked(self):
+    #     self.emotion_rated("surprise")
+    #
+    # def happy_button_clicked(self):
+    #     self.emotion_rated("happy")
 
     def play_next_music_clicked(self):
         # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
@@ -2209,6 +2218,9 @@ class QuadrantWidget(QWidget):
         self.point = QRect()
         self.image = QPixmap('./images/point_icon.png')
 
+        global is_in_building_dataset_phase
+        self.is_goal_emotion = not is_in_building_dataset_phase
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.point = event.pos()
@@ -2240,8 +2252,13 @@ class QuadrantWidget(QWidget):
                 if normalized_y > 0:
                     normalized_y = round(normalized_y + 0.06, 3)
 
-            global goal_emotion
-            goal_emotion = [normalized_x, normalized_y]
+            if self.is_goal_emotion:
+                global goal_emotion
+                goal_emotion = [normalized_x, normalized_y]
+            else:
+                global rated_emotion
+                rated_emotion = [normalized_x, normalized_y]
+                print(rated_emotion)
 
             self.update()
 
@@ -2743,7 +2760,6 @@ class TrainingModelScreen(QMainWindow):
             self.switch_layout()
 
     def finished_train_btn_clicked(self):
-        # TODO - mudar para o ecrã inicial
         self.nextWindow = ApplicationHomeScreen()
         self.nextWindow.show()
         self.close()
