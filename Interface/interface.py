@@ -24,6 +24,7 @@ from keras.layers import Input, Dense
 from keras.optimizers import SGD
 from tensorflow.python.keras import optimizers
 from tensorflow.python.keras.models import model_from_json
+import optuna
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -2703,6 +2704,23 @@ class TrainingModelScreen(QMainWindow):
     def train_model(self):
         global current_user_name
 
+        # def objective(trial):
+        #     learning_rate = trial.suggest_float("learning_rate", 0.0001, 0.1) #log=True
+        #     dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.5)
+        #
+        #     inputs = Input(shape=input_shape)
+        #     hidden_layer = Dense(1, activation='sigmoid')(inputs)
+        #     outputs = Dense(2, activation='sigmoid')(hidden_layer)
+        #     model = Model(inputs=inputs, outputs=outputs)
+        #
+        #     optimizer = SGD(learning_rate=learning_rate)
+        #     model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
+        #
+        #     history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+        #     score = model.evaluate(X_test, y_test, verbose=0)
+        #
+        #     return score[0]
+
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
             # 1. Get normalized dataset of username
             dataset = pd.read_csv(file)
@@ -2716,6 +2734,28 @@ class TrainingModelScreen(QMainWindow):
             # 4. Split the data and Train the model
             print("Train and test split...")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+            # study = optuna.create_study(direction="minimize")
+            # study.optimize(objective, n_trials=100)
+            #
+            # best_params = study.best_params
+            # print("Best params: ", best_params)
+            # best_learning_rate = best_params["learning_rate"]
+            # best_dropout_rate = best_params["dropout_rate"]
+            #
+            # #Use the best hyperparameters
+            # inputs = Input(shape=input_shape)
+            # hidden_layer = Dense(1, activation='sigmoid')(inputs)
+            # outputs = Dense(2, activation='sigmoid')(hidden_layer)
+            # model = Model(inputs=inputs, outputs=outputs)
+            #
+            # optimizer = SGD(learning_rate=best_learning_rate)
+            # model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
+            #
+            # history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+            #
+            # evaluation_results = model.evaluate(X_test, y_test, verbose=0)
+
 
             # Define the input shape
             input_shape = (X_train.shape[1],)  # Replace num_features with the actual number of input features
@@ -2750,6 +2790,7 @@ class TrainingModelScreen(QMainWindow):
             print("Evaluation results: ")
             for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
                 print(metric_name + ": " + str(metric_value))
+
 
             # 6. Save the model
             model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
