@@ -1,6 +1,8 @@
 from datetime import datetime
 import context.extract as extract
 import numpy as np
+import os
+from dotenv import load_dotenv
 
 
 def get_weather_type(data, id):
@@ -71,7 +73,9 @@ def get_is_work_day(date, city):
     if day.weekday() > 4:
         return 'No'
     # Call api to check whether current day is an holiday or not
-    api_key = "3db2fcbdd9654b2d8d0483278ec5a7c3"
+    load_dotenv()
+    api_key = os.getenv("API_HOLIDAYS_ABSTRACT_KEY")
+    # api_key = "3db2fcbdd9654b2d8d0483278ec5a7c3"
     d, m, y = day.day, day.month, day.year
     result = extract.getJsonResponseFromUrl(f"https://holidays.abstractapi.com/v1?api_key={api_key}&country=PT&day={d}&month={m}&year={y}")
     if result is None:

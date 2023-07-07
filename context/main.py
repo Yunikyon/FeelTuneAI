@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import context.extract as extract
 import context.transform as transform
 from datetime import datetime
@@ -54,9 +56,15 @@ def execute():
         new_record['timeOfDay'] = transform.transform_hours_into_day_classification(new_record['currentTime'])
         new_record['isWorkDay'] = transform.get_is_work_day(new_record['currentTime'], closest_city)
 
+        load_dotenv()
+        api_ninjas_weather_key = os.getenv("API_NINJAS_WEATHER_KEY")
+
+        # responseWeatherApi = extract.getJsonResponseFromUrl(
+        #     f"https://api.api-ninjas.com/v1/weather?lat={row['latitude']}&lon={row['longitude']}",
+        #     "X-Api-Key:gsNY5AepnuvZYcIOG0q4rg==W9sSXxN89hDQSAi0")
         responseWeatherApi = extract.getJsonResponseFromUrl(
             f"https://api.api-ninjas.com/v1/weather?lat={row['latitude']}&lon={row['longitude']}",
-            "X-Api-Key:gsNY5AepnuvZYcIOG0q4rg==W9sSXxN89hDQSAi0")
+            "X-Api-Key:" + api_ninjas_weather_key)
         if responseWeatherApi is None:
             has_weather_api_problem = True
             values.append(new_record)

@@ -20,10 +20,12 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.neural_network import MLPRegressor
 from mutagen.mp3 import MP3
 from keras.models import Model
-from keras.layers import Input, Dense
+from keras.layers import Input, Dense, Dropout
 from keras.optimizers import SGD
 from tensorflow.python.keras import optimizers
 from tensorflow.python.keras.models import model_from_json
+import optuna
+import matplotlib.pyplot as plt
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -229,11 +231,10 @@ def merge_musics_va_to_dataset(dataset):
 
 def add_va_columns_from_emotions(dataset):
     global is_training_model
-    global rated_emotion
 
     for index, row in dataset.iterrows():
         # Example -> 6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;9|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad;
-        emotions = row['instant_seconds|percentages|dominant_emotion']
+        emotions = dataset.at[index, 'instant_seconds|percentages|dominant_emotion']
 
         first_emotion = emotions.split(';')[0]
 
@@ -245,9 +246,17 @@ def add_va_columns_from_emotions(dataset):
             dataset.at[index, 'valence_last_emotion'],\
                 dataset.at[index, 'arousal_last_emotion'] = convert_emotions_to_va_values(last_emotion)
 
-            # 3. Apply rated emotion weight - TODO -> fazer para todos os valores - vai dar erro agora, tenho que fazer o split
-            dataset.at[index, 'valence_last_emotion'] = np.mean(np.concatenate((dataset.at[index, 'valence_last_emotion'], rated_emotion[0])))
-            dataset.at[index, 'arousal_last_emotion'] = np.mean(np.concatenate((dataset.at[index, 'arousal_last_emotion'], rated_emotion[1])))
+            # 3. Apply rated emotion weight
+            rated_emotion = dataset.at[index, 'rated_emotion'].split('|')
+            rated_emotion_0 = float(rated_emotion[0])
+            rated_emotion_1 = float(rated_emotion[1])
+
+            if len(rated_emotion) != 2:
+                continue
+
+            # 3. Apply rated emotion weight
+            dataset.at[index, 'valence_last_emotion'] = (dataset.at[index, 'valence_last_emotion'] + rated_emotion_0) / 2
+            dataset.at[index, 'arousal_last_emotion'] = (dataset.at[index, 'arousal_last_emotion'] + rated_emotion_1) / 2
         else:  # Goal emotion
             global goal_emotion
             dataset.at[index, 'valence_last_emotion'] = goal_emotion[0]
@@ -275,7 +284,7 @@ def normalize_dataset(filtered_df):
     global is_training_model
 
     if is_training_model:  # if training, not predicting
-        filtered_df = filtered_df.drop(labels=['username', 'last_emotion', 'rated_emotion'], axis=1)
+        filtered_df = filtered_df.drop(labels=['username', 'last_emotion'], axis=1)
         filtered_df = merge_musics_va_to_dataset(filtered_df)
         filtered_df = filtered_df.drop(labels=['music_name'], axis=1)
 
@@ -446,7 +455,7 @@ def normalize_dataset(filtered_df):
         max_value = 1
         filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
 
-    filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
+    filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion', 'rated_emotion'], axis=1)
 
 
     numerical_columns.extend(['listenedAt', 'sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
@@ -2702,6 +2711,42 @@ class TrainingModelScreen(QMainWindow):
 
     def train_model(self):
         global current_user_name
+        global x_train, y_train, x_test, y_test
+        # global epochs, batch_size
+        epochs = 100
+        batch_size = 16
+
+        def objective(trial):
+            learning_rate = trial.suggest_float("learning_rate", 0.0001, 0.1) #log=True
+            dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.5)
+
+            inputs = Input(shape=input_shape)
+            hidden_layer = Dense(1, activation='sigmoid')(inputs)
+            dropout_layer = Dropout(dropout_rate)(hidden_layer)
+            outputs = Dense(2, activation='sigmoid')(hidden_layer)
+            model = Model(inputs=inputs, outputs=outputs)
+
+            optimizer = SGD(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
+
+            history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+
+            # Access the history for each epoch
+            # epochs_losses = history.history['loss']
+            # epoch_metrics = history.history['mean_absolute_percentage_error']
+            # Store the training history graph
+            plt.plot(history.history['loss'])
+            plt.plot(history.history['mean_absolute_percentage_error'])
+            plt.title('Model Training History')
+            plt.xlabel('Epoch')
+            plt.ylabel('Value')
+            plt.legend(['Loss', 'Mean Absolute Percentage Error'], loc='upper right')
+            plt.savefig('training_history.png')
+            plt.close()
+
+            score = model.evaluate(x_test, y_test, verbose=0)
+
+            return score[0]
 
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
             # 1. Get normalized dataset of username
@@ -2711,12 +2756,43 @@ class TrainingModelScreen(QMainWindow):
             y = dataset[['music_valence', 'music_arousal']]
 
             # 3. Get context
-            X = dataset.drop(labels=['music_valence', 'music_arousal'], axis=1)
+            x = dataset.drop(labels=['music_valence', 'music_arousal'], axis=1)
 
             # 4. Split the data and Train the model
             print("Train and test split...")
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 
+            input_shape = (x_train.shape[1],)
+
+            # Create an Optuna study
+            study = optuna.create_study(direction="minimize")
+
+            # Run the optimization
+            study.optimize(objective, n_trials=100)
+
+            best_params = study.best_params
+            print("Best params: ", best_params)
+            best_learning_rate = best_params["learning_rate"]
+            best_dropout_rate = best_params["dropout_rate"]
+
+            #Use the best hyperparameters
+            inputs = Input(shape=input_shape)
+            hidden_layer = Dense(1, activation='sigmoid')(inputs)
+            dropout_layer = Dropout(best_dropout_rate)(hidden_layer)
+            # outputs = Dense(2, activation='sigmoid')(hidden_layer)
+            outputs = Dense(2, activation='sigmoid')(dropout_layer)
+            model = Model(inputs=inputs, outputs=outputs)
+
+            optimizer = SGD(learning_rate=best_learning_rate)
+            model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
+
+            history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+            epochs_losses = history.history['loss']
+            epoch_metrics = history.history['mean_absolute_percentage_error']
+
+            evaluation_results = model.evaluate(x_test, y_test, verbose=0)
+            print("Evaluation results: ", evaluation_results)
+            '''
             # Define the input shape
             input_shape = (X_train.shape[1],)  # Replace num_features with the actual number of input features
             # Define the inputs
@@ -2750,6 +2826,7 @@ class TrainingModelScreen(QMainWindow):
             print("Evaluation results: ")
             for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
                 print(metric_name + ": " + str(metric_value))
+            '''
 
             # 6. Save the model
             model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
