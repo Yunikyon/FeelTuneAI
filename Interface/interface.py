@@ -455,8 +455,10 @@ def normalize_dataset(filtered_df):
         max_value = 1
         filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
 
-    filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion', 'rated_emotion'], axis=1)
+    filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
 
+    if is_in_building_dataset_phase:
+        filtered_df = filtered_df.drop(labels=['rated_emotion'], axis=1)
 
     numerical_columns.extend(['listenedAt', 'sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
                               'arousal_initial_emotion', 'valence_last_emotion', 'arousal_last_emotion'])
@@ -1727,8 +1729,8 @@ class MusicsWindow(QMainWindow):
 
             self.nextWindow = TrainingModelScreen()
             self.nextWindow.show()
+            self.nextWindow.train_thread.start()
             self.close()
-            self.nextWindow.train_model() # TODO - a interface não abre
 
 
 class MusicThread(QThread):
@@ -1828,6 +1830,7 @@ class EmotionsThread(QThread):
         global new_record
 
         self.emotions_running = False
+        self.video = None
         if len(current_music_emotions) == 0:
             return
 
@@ -2535,6 +2538,10 @@ class TrainingModelScreen(QMainWindow):
 
         self.nextWindow = None
 
+        # Start the training in a separate thread
+        self.train_thread = TrainThread()
+        self.train_thread.finished_train_signal.connect(self.train_finished)
+
         # Base Layout
         base_layout = QVBoxLayout()
         base_layout.setContentsMargins(10, 20, 10, 10)
@@ -2700,6 +2707,10 @@ class TrainingModelScreen(QMainWindow):
         base_widget.setLayout(base_layout)
         self.setCentralWidget(base_widget)
 
+    def train_finished(self):
+        global is_training_model
+        is_training_model = False
+        self.switch_layout()
 
     def switch_layout(self):
         global is_training_model
@@ -2878,6 +2889,120 @@ class TrainingModelScreen(QMainWindow):
                 quit(0)
             else:
                 event.ignore()
+
+
+class TrainThread(QThread):
+    finished_train_signal = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def run(self):
+        global current_user_name
+
+        def train(x_train, y_train, learning_rate, num_units, dropout_rate, epochs, batch_size):
+            print(f"Training...")
+            # Define the input shape
+            input_shape = (x_train.shape[1],)
+
+            # Define the inputs
+            inputs = Input(shape=input_shape)
+
+            # Define the hidden layer with one layer and num_units neurons
+            hidden_layer = Dense(num_units, activation='sigmoid')(inputs)
+            hidden_layer = Dropout(dropout_rate)(hidden_layer)
+
+            # Define the output layer with 2 neurons
+            outputs = Dense(2, activation='sigmoid')(hidden_layer)
+
+            # Create the model
+            model = Model(inputs=inputs, outputs=outputs)
+
+            # Compile the model with the desired learning rate
+            optimizer = SGD(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
+
+            # Train the model
+            history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+
+            # Return the metric values for each epoch during training
+            return history.history['mean_absolute_percentage_error'][-1], model
+
+        def objective(trial, x_train, x_test, y_train, y_test):
+            # Define the hyperparameters to be optimized
+            learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+            num_units = trial.suggest_int('num_units', 32, 512)
+            dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
+            batch_size = trial.suggest_int('batch_size', 8, 128)
+            epochs = trial.suggest_int('epochs', 50, 200)
+
+            # Train the model and obtain the validation metric
+            _, model = train(x_train, y_train, learning_rate, num_units, dropout_rate, epochs, batch_size)
+
+            # Evaluate the model using the test data
+            metric = model.evaluate(x_test, y_test)[0]
+
+            # Return the test metric as the objective value to be optimized (minimized)
+            return metric
+
+        with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
+            # 1. Get normalized dataset of username
+            dataset = pd.read_csv(file)
+
+            # 2. Get labels
+            y = dataset[['music_valence', 'music_arousal']]
+
+            # 3. Get context
+            x = dataset.drop(labels=['music_valence', 'music_arousal'], axis=1)
+
+            # 4. Split the data and Train the model
+            print("Train and test split...")
+            x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.15, random_state=42)
+
+            study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
+            study.optimize(
+                lambda trial: objective(trial, x_train, x_test, y_train, y_test), n_trials=5)
+
+            # Plot and save the optimization history
+            fig = vis.plot_optimization_history(study)
+            fig.update_layout(title=f"{current_user_name.capitalize()} Model Optimization History", yaxis_title="MAPE")
+            # TODO -> Create folder if it does not exist
+            fig.write_image(f"./Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
+
+            # Plot and save the slice plot
+            fig = vis.plot_slice(study)
+            fig.update_layout(title=f"{current_user_name.capitalize()} Model Slice Plot", yaxis_title="MAPE")
+            fig.write_image(f"./Optuna_History_images/{current_user_name.lower()}_optuna_slice_plot.png")
+
+            # Get the best hyperparameters
+            best_trial = study.best_trial
+            best_learning_rate = best_trial.params['learning_rate']
+            best_num_units = best_trial.params['num_units']
+            best_dropout_rate = best_trial.params['dropout_rate']
+            best_epochs = best_trial.params['epochs']
+            best_batch_size = best_trial.params['batch_size']
+
+            best_metric, best_model = train(x_train, y_train, best_learning_rate, best_num_units, best_dropout_rate,
+                                            best_epochs, best_batch_size)
+
+            # Evaluate the model using the test data
+            test_metric = best_model.evaluate(x_test, y_test)[0]
+
+            print('Best training value: {:.5f}'.format(best_metric))
+            print('Best test value: {:.5f}'.format(test_metric))
+            print('Best parameters: {}'.format(best_trial.params))
+
+            # TODO -> Create folder if it does not exist
+            # 6. Save the model
+            model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
+            best_model.save(model_file)
+
+
+        # ---------- Finished Music ----------
+        self.finished_train_signal.emit()
+
+        pass
+
 
 def main():
     # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
