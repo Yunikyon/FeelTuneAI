@@ -388,18 +388,18 @@ def normalize_dataset(filtered_df):
     filtered_df = filtered_df.drop(labels=['idWeatherType', 'classWindSpeed', 'classPrecInt', 'timeOfDay',
                                            'initial_emotion'], axis=1)
 
-    # --- Numerical columns: tMin, tMax, temp, feels_like, min_temp, max_temp, cloud_pct, humidity, wind_speed,
+    # --- Numerical columns: tMin, tMax, temp, feels_like, cloud_pct, humidity, wind_speed,
     # precipitaProb ---
-    numerical_columns = ['tMin', 'tMax', 'temp', 'feels_like',
-                         'min_temp', 'max_temp', 'cloud_pct',
-                         'humidity', 'wind_speed', 'precipitaProb']
+    numerical_columns = ['tMin', 'tMax', 'temp',
+                         'feels_like', 'cloud_pct', 'humidity',
+                         'wind_speed', 'precipitaProb']
 
     # Replacing missing values with average
     mean_imputer.fit(filtered_df[numerical_columns])  # finds the mean of every column
     filtered_df[numerical_columns] = mean_imputer.transform(filtered_df[numerical_columns])  # replaces
 
-    # --- Temperature columns: tMin, tMax, temp, feels_like, min_temp, max_temp ---
-    temperature_columns = ['tMin', 'tMax', 'temp', 'feels_like', 'min_temp', 'max_temp']
+    # --- Temperature columns: tMin, tMax, temp, feels_like ---
+    temperature_columns = ['tMin', 'tMax', 'temp', 'feels_like']
 
     # For every temperature column normalize with min max
     for column in temperature_columns:
@@ -1481,7 +1481,7 @@ class MusicsWindow(QMainWindow):
                                   'last_emotion', 'rated_emotion', 'instant_seconds|percentages|dominant_emotion',
                                   'precipitaProb', 'tMin', 'tMax', 'idWeatherType', 'classWindSpeed',
                                   'classPrecInt', 'sunrise', 'sunset', 'day_length', 'timeOfDay', 'isWorkDay',
-                                  'cloud_pct', 'temp', 'feels_like', 'humidity', 'min_temp', 'max_temp', 'wind_speed']
+                                  'cloud_pct', 'temp', 'feels_like', 'humidity', 'wind_speed']
 
                     writer.writerow(header_row)
 
@@ -2815,7 +2815,12 @@ class TrainingModelScreen(QMainWindow):
             # Plot and save the optimization history
             fig = vis.plot_optimization_history(study)
             fig.update_layout(title=f"{current_user_name.capitalize()} Model Optimization History", yaxis_title="MAPE")
-            # TODO -> Create folder if it does not exist
+
+            # Create folder if it does not exist
+            folder_name = f"./Optuna_History_images/"
+            if not os.path.exists(folder_name):
+                os.makedirs(folder_name)
+
             fig.write_image(f"./Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
 
             # Plot and save the slice plot
@@ -2841,10 +2846,14 @@ class TrainingModelScreen(QMainWindow):
             print('Best test value: {:.5f}'.format(test_metric))
             print('Best parameters: {}'.format(best_trial.params))
 
-
-
-            # TODO -> Create folder if it does not exist
             # 6. Save the model
+
+            # Create folder if it does not exist
+            folder_name = f"../MusicPredictModels/"
+            if not os.path.exists(folder_name):
+                os.makedirs(folder_name)
+
+            # Save the model
             model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
             best_model.save(model_file)
 

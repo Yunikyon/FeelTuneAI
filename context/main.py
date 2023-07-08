@@ -136,6 +136,7 @@ def execute():
                      'updateTime', 'distance', 'currentTime', 'local', 'predWindDir'], axis=1, inplace=True)
     else:
         df3.drop(labels=['longitude', 'latitude', 'globalIdLocal', 'forecastDate',
-                         'updateTime', 'distance', 'currentTime', 'local', 'predWindDir', 'wind_degrees'], axis=1, inplace=True)
+                         'updateTime', 'distance', 'currentTime', 'local',
+                         'predWindDir', 'wind_degrees', 'min_temp', 'max_temp'], axis=1, inplace=True)
     return df3
 
