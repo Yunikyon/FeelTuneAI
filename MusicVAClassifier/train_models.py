@@ -231,84 +231,99 @@ def build_model():
                                                                                         test_size=0.2, random_state=42)
 
     # --- Valence Model With Optuna
-    study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
-    study.optimize(lambda trial: objective(trial, x_test_valence, x_train_valence, y_test_valence, y_train_valence,
-                                           'valence'), n_trials=5)
+    # study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
+    # study.optimize(lambda trial: objective(trial, x_train_valence, y_train_valence,
+    #                                        'valence'), n_trials=150)
 
     # Plot and save the optimization history
     # optuna_history = study.trials_dataframe()
-    fig = vis.plot_optimization_history(study)
-    fig.write_image("valence_optuna_history.png")
+    # fig = vis.plot_optimization_history(study)
+    # fig.update_layout(title="Valence Optimization History", yaxis_title="MAPE")
+    # fig.write_image("./Optuna_History_images/valence_optuna_history.png")
 
     # Plot and save the slice plot
-    fig = vis.plot_slice(study)
-    fig.write_image("valence_optuna_slice_plot.png")
+    # fig = vis.plot_slice(study)
+    # fig.update_layout(title="Valence Slice Plot", yaxis_title="MAPE")
+    # fig.write_image("./Optuna_History_images/valence_optuna_slice_plot.png")
 
-    best_trial = study.best_trial
-    best_learning_rate = best_trial.params['learning_rate']
-    best_num_units = best_trial.params['num_units']
-    best_dropout_rate = best_trial.params['dropout_rate']
+    # best_trial = study.best_trial
+    # best_learning_rate = best_trial.params['learning_rate']
+    # best_num_units = best_trial.params['num_units']
+    # best_dropout_rate = best_trial.params['dropout_rate']
 
-    best_metric, best_model = train_model(x_test_valence, x_train_valence, y_test_valence, y_train_valence, 'valence',
-                                          best_learning_rate, best_num_units, best_dropout_rate)
+    # best_metric_valence, best_model_valence = train_model(x_train_valence, y_train_valence, 'valence',
+    #                                                       best_learning_rate, best_num_units, best_dropout_rate)
 
-    print('Best value: {:.5f}'.format(best_metric))
-    print('Best parameters: {}'.format(best_trial.params))
+    best_metric_valence, best_model_valence = train_model(x_train_valence, y_train_valence, 'valence',
+                                                          0.0007587243085528094, 282, 0.0004096418070471742)
+
+    print('Best value: {:.5f}'.format(best_metric_valence))
+    # print('Best parameters: {}'.format(best_trial.params))
+
+    # 5. Evaluate the model on the test data
+    evaluation_results = best_model_valence.evaluate(x_test_valence, y_test_valence)
+
+    # Print the metric values during evaluation
+    print(f"Valence evaluation results: ")
+    for metric_name, metric_value in zip(best_model_valence.metrics_names, evaluation_results):
+        print(metric_name + ": " + str(metric_value))
 
     # Save the best model
-    best_model.save("../models/valence_model.h5")
+    best_model_valence.save("../models/valence_model.h5")
 
     # --- Arousal Model With Optuna
-    study_arousal = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
-    study_arousal.optimize(lambda trial: objective(trial, x_test_arousal, x_train_arousal, y_test_arousal,
-                                                   y_train_arousal, 'arousal'), n_trials=5)
+    # study_arousal = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
+    # study_arousal.optimize(lambda trial: objective(trial, x_train_arousal, y_train_arousal, 'arousal'),
+    #                        n_trials=150)
+    #
+    # # Plot and save the optimization history
+    # # optuna_history = study.trials_dataframe()
+    # fig_arousal = vis.plot_optimization_history(study_arousal)
+    # fig_arousal.update_layout(title="Arousal Optimization History", yaxis_title="MAPE")
+    # fig_arousal.write_image("./Optuna_History_images/arousal_optuna_history.png")
+    #
+    # # Plot and save the slice plot
+    # fig_arousal = vis.plot_slice(study_arousal)
+    # fig_arousal.update_layout(title="Arousal Slice Plot", yaxis_title="MAPE")
+    # fig_arousal.write_image("./Optuna_History_images/arousal_optuna_slice_plot.png")
+    #
+    # best_trial_arousal = study_arousal.best_trial
+    # best_learning_rate_arousal = best_trial_arousal.params['learning_rate']
+    # best_num_units_arousal = best_trial_arousal.params['num_units']
+    # best_dropout_rate_arousal = best_trial_arousal.params['dropout_rate']
 
-    # Plot and save the optimization history
-    # optuna_history = study.trials_dataframe()
-    fig_arousal = vis.plot_optimization_history(study_arousal)
-    fig_arousal.write_image("arousal_optuna_history.png")
-
-    # Plot and save the slice plot
-    fig_arousal = vis.plot_slice(study_arousal)
-    fig_arousal.write_image("arousal_optuna_slice_plot.png")
-
-    best_trial_arousal = study_arousal.best_trial
-    best_learning_rate_arousal = best_trial_arousal.params['learning_rate']
-    best_num_units_arousal = best_trial_arousal.params['num_units']
-    best_dropout_rate_arousal = best_trial_arousal.params['dropout_rate']
-
-    best_metric_arousal, best_model_arousal = train_model(x_test_arousal, x_train_arousal, y_test_arousal,
-                                                          y_train_arousal, 'arousal', best_learning_rate_arousal,
-                                                          best_num_units_arousal, best_dropout_rate_arousal)
+    best_metric_arousal, best_model_arousal = train_model(x_train_arousal, y_train_arousal, 'arousal',
+                                                          0.00018793577373009968, 369,
+                                                          0.2841357947811655)
 
     print('Best value: {:.5f}'.format(best_metric_arousal))
-    print('Best parameters: {}'.format(best_trial_arousal.params))
+    # print('Best parameters: {}'.format(best_trial_arousal.params))
+
+    # 5. Evaluate the model on the test data
+    evaluation_results = best_model_arousal.evaluate(x_test_arousal, y_test_arousal)
+
+    # Print the metric values during evaluation
+    print(f"Arousal evaluation results: ")
+    for metric_name, metric_value in zip(best_model_arousal.metrics_names, evaluation_results):
+        print(metric_name + ": " + str(metric_value))
 
     # Save the best mode
     best_model_arousal.save("../models/arousal_model.h5")
 
 
-def objective(trial, x_test, x_train, y_test, y_train, characteristic):
+def objective(trial, x_train, y_train, characteristic):
     # Define the hyperparameters to be optimized
-    learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
+    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
     num_units = trial.suggest_int('num_units', 32, 512)
-    dropout_rate = trial.suggest_uniform('dropout_rate', 0.0, 0.5)
+    dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
 
     # Train the model and obtain the validation metric
-    metric, _ = train_model(x_test, x_train, y_test, y_train, characteristic, learning_rate, num_units, dropout_rate)
-
-    # 5. Evaluate the model on the test data
-    # evaluation_results = model.evaluate(x_test, y_test)
-
-    # Print the metric values during evaluation
-    # print(f"{characteristic} evaluation results: ")
-    # for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
-    #     print(metric_name + ": " + str(metric_value))
+    metric, _ = train_model(x_train, y_train, characteristic, learning_rate, num_units, dropout_rate)
 
     # Return the validation metric as the objective value to be optimized (minimized)
     return metric
 
-def train_model(x_test, x_train, y_test, y_train, characteristic, learning_rate, num_units, dropout_rate):
+def train_model(x_train, y_train, characteristic, learning_rate, num_units, dropout_rate):
     print(f"Training {characteristic}...")
     # Define the input shape
     input_shape = (x_train.shape[1],)

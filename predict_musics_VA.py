@@ -23,8 +23,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(mfcc))  # -667.08264
     print(np.max(mfcc))  # 260.12265
     mfcc = np.around(np.interp(mfcc, (-700, 300), (0, 1)), decimals=3)
-    # mfcc = np.mean(mfcc, axis=-1)
-    # mfcc = mfcc.flatten()
     print("Mfcc done!")
 
     # Spectral centroid
@@ -35,8 +33,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(cent))  # 0.0
     print(np.max(cent))  # 8504.014129762603
     cent = np.around(np.interp(cent, (0, 8550), (0, 1)), decimals=3)
-    # cent = np.mean(cent, axis=-1)
-    # cent = cent.flatten()
     print("cent done!")
 
     # TODO - Acho que Range: [0; 1]
@@ -48,8 +44,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(zcr))  # 0.0
     print(np.max(zcr))  # 0.82666015625
     zcr = np.around(zcr, decimals=3)
-    # zcr = np.mean(zcr, axis=-1)
-    # zcr = zcr.flatten()
     print("zcr done!")
 
     # --- Extract Valence features using librosa
@@ -63,8 +57,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(chroma_cqt))  # 0.0049088965
     print(np.max(chroma_cqt))  # 1.0
     chroma_cqt = np.around(chroma_cqt, decimals=3)
-    # chroma_cqt = np.mean(chroma_cqt, axis=-1)
-    # chroma_cqt = chroma_cqt.flatten()
     print("Chroma_cqt done!")
 
     # Range: [0; 1]
@@ -76,8 +68,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(chroma_stft))  # 0.0
     print(np.max(chroma_stft))  # 1.0
     chroma_stft = np.around(chroma_stft, decimals=3)
-    # chroma_stft = np.mean(chroma_stft, axis=-1)
-    # chroma_stft = chroma_stft.flatten()
     print("chroma_stft done!")
 
     # Range: [0; 1]
@@ -89,8 +79,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(chroma_cens))  # 0.0
     print(np.max(chroma_cens))  # 1.0
     chroma_cens = np.around(chroma_cens, decimals=3)
-    # chroma_cens = np.mean(chroma_cens, axis=-1)
-    # chroma_cens = chroma_cens.flatten()
     print("chroma_cens done!")
 
     # Spectral rolloff
@@ -102,8 +90,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(rolloff))  # 0.0
     print(np.max(rolloff))  # 10562.0361328125
     rolloff = np.around(np.interp(rolloff, (0, 10800), (0, 1)), decimals=3)
-    # rolloff = np.mean(rolloff, axis=-1)
-    # rolloff = rolloff.flatten()
     print("rolloff done!")
 
     # --- Extract Arousal features using librosa
@@ -116,10 +102,6 @@ def predict_music_directory_emotions(directory, csv_name):
     print(np.min(spectral_contrast))  # 0.17194677838910621
     print(np.max(spectral_contrast))  # 72.256236009688
     spectral_contrast = np.around(np.interp(spectral_contrast, (0, 100), (0, 1)), decimals=3)
-    # array_spectral_contrast = spectral_contrast.reshape((spectral_contrast.shape[0], 1,
-    #                                                      spectral_contrast.shape[1] * spectral_contrast.shape[2]))
-    # spectral_contrast = np.mean(array_spectral_contrast, axis=-1)
-    # spectral_contrast = spectral_contrast.flatten()
     print("Spectral_contrast done!")
 
     # Create individual DataFrames for each array
@@ -141,12 +123,12 @@ def predict_music_directory_emotions(directory, csv_name):
 
     print("Predicting valence...")
     # Use the trained model to make predictions
-    valence_model = keras.models.load_model(f'./models/valence_model.h5')
+    valence_model = keras.models.load_model(f'./models/valence_model_two.h5')
     predicted_valence = valence_model.predict(dataframe_valence)
     valence = np.around(np.interp(predicted_valence, (0, 1), (-1, 1)), decimals=3)
 
     print("Predicting arousal...")
-    arousal_model = keras.models.load_model(f'./models/arousal_model.h5')
+    arousal_model = keras.models.load_model(f'./models/arousal_model_two.h5')
     predicted_arousal = arousal_model.predict(dataframe_arousal)
     arousal = np.around(np.interp(predicted_arousal, (0, 1), (-1, 1)), decimals=3)
 
@@ -159,7 +141,7 @@ def predict_music_directory_emotions(directory, csv_name):
 
         i = 0
         for music in files:
-            l = delimiter.join([music, str(valence[i]), str(arousal[i])])
+            l = delimiter.join([music, str(valence[i][0]), str(arousal[i][0])])
             csv_file.write(l + '\n')
             i += 1
 
@@ -289,7 +271,7 @@ def predict_uploaded_music_emotions(directory, file, csv_name):
 
 
 if __name__ == '__main__':
-    predict_music_directory_emotions('./BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va_2')
+    predict_music_directory_emotions('./BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va_3')
 
 # predict_uploaded_music_emotions('./BuildingDatasetPhaseMusics', 'Avril Lavigne - Girlfriend (Official Video).mp3', 'building_dataset_phase_musics_va')
 
