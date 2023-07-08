@@ -1717,7 +1717,7 @@ class MusicsWindow(QMainWindow):
         with open('../dataset_for_model_training.csv', 'r') as file_obj:
             dataset = pd.read_csv(file_obj)
             df = pd.DataFrame(dataset) # So that we don't change the original df (and filtered_df can't be a view)
-            df = df[df['username'] == current_user_name]
+            df = df[df['username'] == current_user_name.lower()]
 
             # Normalize dataframe
             filtered_df = normalize_dataset(df)
@@ -2712,7 +2712,7 @@ class TrainingModelScreen(QMainWindow):
     def train_model(self):
         global current_user_name
 
-        def train(x_train, y_train, learning_rate, num_units, dropout_rate):
+        def train(x_train, y_train, learning_rate, num_units, dropout_rate, epochs, batch_size):
             print(f"Training...")
             # Define the input shape
             input_shape = (x_train.shape[1],)
@@ -2735,32 +2735,26 @@ class TrainingModelScreen(QMainWindow):
             model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
 
             # Train the model
-            epochs = 100
-            batch_size = 16
             history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
 
             # Return the metric values for each epoch during training
             return history.history['mean_absolute_percentage_error'][-1], model
 
-        def objective(trial, x_train, y_train):
+        def objective(trial, x_train, x_test, y_train, y_test):
             # Define the hyperparameters to be optimized
             learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
             num_units = trial.suggest_int('num_units', 32, 512)
             dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
+            batch_size = trial.suggest_int('batch_size', 8, 128)
+            epochs = trial.suggest_int('epochs', 50, 200)
 
             # Train the model and obtain the validation metric
-            metric, _ = train(x_train, y_train,
-                                    learning_rate, num_units, dropout_rate)
+            _, model = train(x_train, y_train, learning_rate, num_units, dropout_rate, epochs, batch_size)
 
-            # 5. Evaluate the model on the test data
-            # evaluation_results = model.evaluate(x_test, y_test)
+            # Evaluate the model using the test data
+            metric = model.evaluate(x_test, y_test)[0]
 
-            # Print the metric values during evaluation
-            # print(f"{characteristic} evaluation results: ")
-            # for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
-            #     print(metric_name + ": " + str(metric_value))
-
-            # Return the validation metric as the objective value to be optimized (minimized)
+            # Return the test metric as the objective value to be optimized (minimized)
             return metric
 
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
@@ -2816,40 +2810,40 @@ class TrainingModelScreen(QMainWindow):
 
             study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
             study.optimize(
-                lambda trial: objective(trial, x_train, y_train), n_trials=5)
+                lambda trial: objective(trial, x_train, x_test, y_train, y_test), n_trials=5)
 
             # Plot and save the optimization history
-            # optuna_history = study.trials_dataframe()
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=DeprecationWarning)
+            fig = vis.plot_optimization_history(study)
+            fig.update_layout(title=f"{current_user_name.capitalize()} Model Optimization History", yaxis_title="MAPE")
+            # TODO -> Create folder if it does not exist
+            fig.write_image(f"./Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
 
-                fig = vis.plot_optimization_history(study)
-                fig.write_image(f"{current_user_name.lower()}_optuna_history.png")
-
-                # Plot and save the slice plot
-                fig = vis.plot_slice(study)
-                fig.write_image(f"{current_user_name.lower()}_optuna_slice_plot.png")
+            # Plot and save the slice plot
+            fig = vis.plot_slice(study)
+            fig.update_layout(title=f"{current_user_name.capitalize()} Model Slice Plot", yaxis_title="MAPE")
+            fig.write_image(f"./Optuna_History_images/{current_user_name.lower()}_optuna_slice_plot.png")
 
             # Get the best hyperparameters
             best_trial = study.best_trial
             best_learning_rate = best_trial.params['learning_rate']
             best_num_units = best_trial.params['num_units']
             best_dropout_rate = best_trial.params['dropout_rate']
+            best_epochs = best_trial.params['epochs']
+            best_batch_size = best_trial.params['batch_size']
 
-            best_metric, best_model = train(x_train, y_train, best_learning_rate,
-                                                  best_num_units, best_dropout_rate)
+            best_metric, best_model = train(x_train, y_train, best_learning_rate, best_num_units, best_dropout_rate,
+                                            best_epochs, best_batch_size)
 
-            # 5. Evaluate the model on the test data
-            evaluation_results = best_model.evaluate(x_test, y_test)
+            # Evaluate the model using the test data
+            test_metric = best_model.evaluate(x_test, y_test)[0]
 
-            # Print the metric values during evaluation
-            print("Evaluation results: ")
-            for metric_name, metric_value in zip(best_model.metrics_names, evaluation_results):
-                print(metric_name + ": " + str(metric_value))
-
-            print('Best value: {:.5f}'.format(best_metric))
+            print('Best training value: {:.5f}'.format(best_metric))
+            print('Best test value: {:.5f}'.format(test_metric))
             print('Best parameters: {}'.format(best_trial.params))
 
+
+
+            # TODO -> Create folder if it does not exist
             # 6. Save the model
             model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
             best_model.save(model_file)
