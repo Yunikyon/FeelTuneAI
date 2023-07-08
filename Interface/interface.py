@@ -316,10 +316,6 @@ def normalize_dataset(filtered_df):
     # --- Time columns: listenedAt, sunset, sunrise, day_length ---
     hours_columns = ['listenedAt', 'sunset', 'sunrise', 'day_length']
 
-    # TODO - remove ?
-    # hours_scaler = MinMaxScaler(feature_range=(0, 1))
-    # filtered_df[hours_columns] = hours_scaler.fit_transform(filtered_df[hours_columns])
-
     # For every time column normalize with min max
     for column in hours_columns:
         # 1. Convert time to minutes
@@ -408,10 +404,6 @@ def normalize_dataset(filtered_df):
         max_value = 50
         filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
 
-    # TODO - remover ?
-    # temp_scaler = MinMaxScaler(feature_range=(0, 1))
-    # filtered_df[temperature_columns] = temp_scaler.fit_transform(filtered_df[temperature_columns])
-
     # --- Percentage columns: cloud_pct, precipitaProb, humidity
     percentage_columns = ['cloud_pct', 'precipitaProb', 'humidity']
 
@@ -422,26 +414,12 @@ def normalize_dataset(filtered_df):
         max_value = 100
         filtered_df[column] = min_max_normalization(filtered_df[column], min_value, max_value)
 
-    # TODO - remover ?
-    # percentage_scaler = MinMaxScaler(feature_range=(0, 1))
-    # filtered_df[from_0_to_100_values] = percentage_scaler.fit_transform(filtered_df[from_0_to_100_values])
-
-    # TODO - remover ?
-    # --- Column: wind_speed ---
-    # wind_speed_scaler = MinMaxScaler(feature_range=(0, 1))
-    # filtered_df['wind_speed'] = wind_speed_scaler.fit_transform(filtered_df[['wind_speed']])
-
     # --- Column: wind_speed ---
     for index, row in filtered_df.iterrows():
         # Convert the range [0; 75] to the range [0; 1]
         min_value = 0
         max_value = 75
         filtered_df.at[index, 'wind_speed'] = min_max_normalization(row['wind_speed'], min_value, max_value)
-
-    # TODO - remover ?
-    # Apply scaler
-    # scaler = StandardScaler()
-    # filtered_df[numerical_columns] = scaler.fit_transform(filtered_df[numerical_columns])
 
     # Convert first and last emotions from percentages to valence and arousal
     filtered_df = add_va_columns_from_emotions(filtered_df)
@@ -457,7 +435,7 @@ def normalize_dataset(filtered_df):
 
     filtered_df = filtered_df.drop(labels=['instant_seconds|percentages|dominant_emotion'], axis=1)
 
-    if is_in_building_dataset_phase:
+    if is_training_model:
         filtered_df = filtered_df.drop(labels=['rated_emotion'], axis=1)
 
     numerical_columns.extend(['listenedAt', 'sunrise', 'sunset', 'day_length', 'valence_initial_emotion',
@@ -465,12 +443,6 @@ def normalize_dataset(filtered_df):
 
     if is_training_model: # Add labels to train
         numerical_columns.extend(['music_valence', 'music_arousal'])
-
-    # TODO - remover ?
-    # Discretize the numerical columns into categories
-    # num_bins = 7  # Number of bins or categories
-    # for col in numerical_columns:
-    #     filtered_df[col] = pd.cut(filtered_df[col], bins=num_bins, labels=False)
 
     filtered_df[numerical_columns] = filtered_df[numerical_columns].round(3)
 
@@ -2963,15 +2935,14 @@ class TrainThread(QThread):
             study.optimize(
                 lambda trial: objective(trial, x_train, x_test, y_train, y_test), n_trials=5)
 
-            # Plot and save the optimization history
-            fig = vis.plot_optimization_history(study)
-            fig.update_layout(title=f"{current_user_name.capitalize()} Model Optimization History", yaxis_title="MAPE")
-
             # Create folder if it does not exist
             folder_name = f"./Optuna_History_images/"
             if not os.path.exists(folder_name):
                 os.makedirs(folder_name)
 
+            # Plot and save the optimization history
+            fig = vis.plot_optimization_history(study)
+            fig.update_layout(title=f"{current_user_name.capitalize()} Model Optimization History", yaxis_title="MAPE")
             fig.write_image(f"./Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
 
             # Plot and save the slice plot
