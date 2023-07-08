@@ -25,7 +25,7 @@ from keras.optimizers import SGD
 from tensorflow.python.keras import optimizers
 from tensorflow.python.keras.models import model_from_json
 import optuna
-import matplotlib.pyplot as plt
+import optuna.visualization as vis
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -2711,42 +2711,57 @@ class TrainingModelScreen(QMainWindow):
 
     def train_model(self):
         global current_user_name
-        global x_train, y_train, x_test, y_test
-        # global epochs, batch_size
-        epochs = 100
-        batch_size = 16
 
-        def objective(trial):
-            learning_rate = trial.suggest_float("learning_rate", 0.0001, 0.1) #log=True
-            dropout_rate = trial.suggest_float("dropout_rate", 0.0, 0.5)
+        def train(x_train, y_train, learning_rate, num_units, dropout_rate):
+            print(f"Training...")
+            # Define the input shape
+            input_shape = (x_train.shape[1],)
 
+            # Define the inputs
             inputs = Input(shape=input_shape)
-            hidden_layer = Dense(1, activation='sigmoid')(inputs)
-            dropout_layer = Dropout(dropout_rate)(hidden_layer)
+
+            # Define the hidden layer with one layer and num_units neurons
+            hidden_layer = Dense(num_units, activation='sigmoid')(inputs)
+            hidden_layer = Dropout(dropout_rate)(hidden_layer)
+
+            # Define the output layer with 2 neurons
             outputs = Dense(2, activation='sigmoid')(hidden_layer)
+
+            # Create the model
             model = Model(inputs=inputs, outputs=outputs)
 
+            # Compile the model with the desired learning rate
             optimizer = SGD(learning_rate=learning_rate)
             model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
 
+            # Train the model
+            epochs = 100
+            batch_size = 16
             history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
 
-            # Access the history for each epoch
-            # epochs_losses = history.history['loss']
-            # epoch_metrics = history.history['mean_absolute_percentage_error']
-            # Store the training history graph
-            plt.plot(history.history['loss'])
-            plt.plot(history.history['mean_absolute_percentage_error'])
-            plt.title('Model Training History')
-            plt.xlabel('Epoch')
-            plt.ylabel('Value')
-            plt.legend(['Loss', 'Mean Absolute Percentage Error'], loc='upper right')
-            plt.savefig('training_history.png')
-            plt.close()
+            # Return the metric values for each epoch during training
+            return history.history['mean_absolute_percentage_error'][-1], model
 
-            score = model.evaluate(x_test, y_test, verbose=0)
+        def objective(trial, x_train, y_train):
+            # Define the hyperparameters to be optimized
+            learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+            num_units = trial.suggest_int('num_units', 32, 512)
+            dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
 
-            return score[0]
+            # Train the model and obtain the validation metric
+            metric, _ = train(x_train, y_train,
+                                    learning_rate, num_units, dropout_rate)
+
+            # 5. Evaluate the model on the test data
+            # evaluation_results = model.evaluate(x_test, y_test)
+
+            # Print the metric values during evaluation
+            # print(f"{characteristic} evaluation results: ")
+            # for metric_name, metric_value in zip(model.metrics_names, evaluation_results):
+            #     print(metric_name + ": " + str(metric_value))
+
+            # Return the validation metric as the objective value to be optimized (minimized)
+            return metric
 
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
             # 1. Get normalized dataset of username
@@ -2760,38 +2775,9 @@ class TrainingModelScreen(QMainWindow):
 
             # 4. Split the data and Train the model
             print("Train and test split...")
-            x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+            x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.15, random_state=42)
 
-            input_shape = (x_train.shape[1],)
-
-            # Create an Optuna study
-            study = optuna.create_study(direction="minimize")
-
-            # Run the optimization
-            study.optimize(objective, n_trials=100)
-
-            best_params = study.best_params
-            print("Best params: ", best_params)
-            best_learning_rate = best_params["learning_rate"]
-            best_dropout_rate = best_params["dropout_rate"]
-
-            #Use the best hyperparameters
-            inputs = Input(shape=input_shape)
-            hidden_layer = Dense(1, activation='sigmoid')(inputs)
-            dropout_layer = Dropout(best_dropout_rate)(hidden_layer)
-            # outputs = Dense(2, activation='sigmoid')(hidden_layer)
-            outputs = Dense(2, activation='sigmoid')(dropout_layer)
-            model = Model(inputs=inputs, outputs=outputs)
-
-            optimizer = SGD(learning_rate=best_learning_rate)
-            model.compile(optimizer=optimizer, loss="mse", metrics=['mean_absolute_percentage_error'])
-
-            history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
-            epochs_losses = history.history['loss']
-            epoch_metrics = history.history['mean_absolute_percentage_error']
-
-            evaluation_results = model.evaluate(x_test, y_test, verbose=0)
-            print("Evaluation results: ", evaluation_results)
+            # ANTES
             '''
             # Define the input shape
             input_shape = (X_train.shape[1],)  # Replace num_features with the actual number of input features
@@ -2828,9 +2814,45 @@ class TrainingModelScreen(QMainWindow):
                 print(metric_name + ": " + str(metric_value))
             '''
 
+            study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
+            study.optimize(
+                lambda trial: objective(trial, x_train, y_train), n_trials=5)
+
+            # Plot and save the optimization history
+            # optuna_history = study.trials_dataframe()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+                fig = vis.plot_optimization_history(study)
+                fig.write_image(f"{current_user_name.lower()}_optuna_history.png")
+
+                # Plot and save the slice plot
+                fig = vis.plot_slice(study)
+                fig.write_image(f"{current_user_name.lower()}_optuna_slice_plot.png")
+
+            # Get the best hyperparameters
+            best_trial = study.best_trial
+            best_learning_rate = best_trial.params['learning_rate']
+            best_num_units = best_trial.params['num_units']
+            best_dropout_rate = best_trial.params['dropout_rate']
+
+            best_metric, best_model = train(x_train, y_train, best_learning_rate,
+                                                  best_num_units, best_dropout_rate)
+
+            # 5. Evaluate the model on the test data
+            evaluation_results = best_model.evaluate(x_test, y_test)
+
+            # Print the metric values during evaluation
+            print("Evaluation results: ")
+            for metric_name, metric_value in zip(best_model.metrics_names, evaluation_results):
+                print(metric_name + ": " + str(metric_value))
+
+            print('Best value: {:.5f}'.format(best_metric))
+            print('Best parameters: {}'.format(best_trial.params))
+
             # 6. Save the model
             model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
-            model.save(model_file)
+            best_model.save(model_file)
 
             global is_training_model
             is_training_model = False
