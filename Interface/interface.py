@@ -51,6 +51,7 @@ musics_listened_by_current_user = [] # To choose what music to play next
 musics_listened_by_current_user_in_current_session = []
 last_context_data = ""
 last_time_context_data_was_called = ""
+last_application_music_played = ""
 
 # dataset for model training variables
 data = []
@@ -1310,6 +1311,7 @@ class MusicsWindow(QMainWindow):
     def choose_next_application_music(self):
         global valence_arousal_pairs
         global application_music_names
+        global last_application_music_played
 
         # Check if camera is available
         success, frames = self.emotion_thread.video.read()
@@ -1372,7 +1374,7 @@ class MusicsWindow(QMainWindow):
 
             # 5. Calculate distance between predicted valence and arousal and the pair's valence and arousal
             # Create a NearestNeighbors model and fit your data
-            nbrs = NearestNeighbors(n_neighbors=1).fit(valence_arousal_pairs)
+            nbrs = NearestNeighbors(n_neighbors=2).fit(valence_arousal_pairs)
 
             # Define your new point
             new_point = pd.DataFrame([[predicted_valence, predicted_arousal]], columns=['music_valence', 'music_arousal'])
@@ -1380,13 +1382,29 @@ class MusicsWindow(QMainWindow):
             # Find the index of the closest point to the new point
             distance, index = nbrs.kneighbors(new_point)
 
+            # 6. Get name of the music to play -> music with the minimum distance
+            music_name = application_music_names[index[0][0]] # Closest one
+            closest_one_chosen = True
+            if last_application_music_played == "":
+                music_name = application_music_names[index[0][0]]
+            else:
+                if music_name == last_application_music_played:
+                    music_name = application_music_names[index[0][1]]
+                    closest_one_chosen = False
+            last_application_music_played = music_name
+
             # Plotting the data points
             plt.scatter(valence_arousal_pairs['music_valence'].values, valence_arousal_pairs['music_arousal'].values,
-                        label='Existing Points')
-            plt.scatter(predicted_valence, predicted_arousal, c='red', marker='x', label='New Point')
-            plt.scatter(valence_arousal_pairs.iloc[index[0]]['music_valence'].values,
-                        valence_arousal_pairs.iloc[index[0]]['music_arousal'].values, c='green', marker='o',
-                        label='Closest Point')
+                        label='Músicas da Aplicação')
+            plt.scatter(predicted_valence, predicted_arousal, c='red', marker='x', label='Nova Música')
+            if closest_one_chosen:
+                plt.scatter(valence_arousal_pairs.iloc[index[0][0]]['music_valence'],
+                        valence_arousal_pairs.iloc[index[0][0]]['music_arousal'], c='green', marker='o',
+                        label='Música Escolhida')
+            else:
+                plt.scatter(valence_arousal_pairs.iloc[index[0][1]]['music_valence'],
+                            valence_arousal_pairs.iloc[index[0][1]]['music_arousal'], c='orange', marker='o',
+                            label='Segunda Música Mais Próxima')
 
             plt.xlabel('Valence')
             plt.ylabel('Arousal')
@@ -1399,9 +1417,6 @@ class MusicsWindow(QMainWindow):
 
             plt.legend()
             plt.show()
-
-            # 6. Get name of the music to play -> music with the minimum distance
-            music_name = application_music_names[index[0][0]]
 
             return music_name
 
