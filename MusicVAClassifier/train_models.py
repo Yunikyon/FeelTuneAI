@@ -233,7 +233,7 @@ def build_model():
     # --- Valence Model With Optuna
     study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
     study.optimize(lambda trial: objective(trial, x_train_valence, y_train_valence,
-                                           'valence'), n_trials=5)
+                                           'valence'), n_trials=150)
 
     # Plot and save the optimization history
     optuna_history = study.trials_dataframe()
@@ -277,7 +277,7 @@ def build_model():
     # --- Arousal Model With Optuna
     study_arousal = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
     study_arousal.optimize(lambda trial: objective(trial, x_train_arousal, y_train_arousal, 'arousal'),
-                           n_trials=5)
+                           n_trials=150)
 
     # Plot and save the optimization history
     # optuna_history = study.trials_dataframe()

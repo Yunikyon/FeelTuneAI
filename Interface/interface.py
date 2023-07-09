@@ -1802,7 +1802,7 @@ class EmotionsThread(QThread):
         global new_record
 
         self.emotions_running = False
-        self.video = None
+        # self.video = None
         if len(current_music_emotions) == 0:
             return
 
@@ -2933,7 +2933,7 @@ class TrainThread(QThread):
 
             study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
             study.optimize(
-                lambda trial: objective(trial, x_train, x_test, y_train, y_test), n_trials=5)
+                lambda trial: objective(trial, x_train, x_test, y_train, y_test), n_trials=150)
 
             # Create folder if it does not exist
             folder_name = f"./Optuna_History_images/"
