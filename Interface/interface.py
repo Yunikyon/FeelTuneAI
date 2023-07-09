@@ -610,7 +610,7 @@ class LoginWindow(QMainWindow):
                         aux_musics_listened_previously = line_content[2]
                         break
 
-        if progress == 100:
+        if progress == 100 and os.path.isfile(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5'):
             is_in_building_dataset_phase = False
 
         if aux_musics_listened_previously != '':
@@ -1713,6 +1713,7 @@ class MusicThread(QThread):
 
         self.directory = directory
         self.personalized_directory = personalized_directory
+        self.music_name = ''
 
         self.defined_volume = -1
         self.music_is_paused = False
@@ -1757,21 +1758,23 @@ class MusicThread(QThread):
     def run(self):
         # ---------- Initialize Pygame Mixer ----------
         pygame.mixer.init()
-        # pygame.mixer.music.load(self.directory + '/' + self.music_name)
-        pygame.mixer.music.load(self.music_name)
 
-        if self.defined_volume != -1:
-            self.set_volume(self.defined_volume)
-        else:
-            self.set_volume(0.2)
-        pygame.mixer.music.play()  # plays music
+        if self.music_name != '':
+            # pygame.mixer.music.load(self.directory + '/' + self.music_name)
+            pygame.mixer.music.load(self.music_name)
 
-        # ---------- Waits for the music to end ----------
-        while pygame.mixer.music.get_busy() or self.music_is_paused:
-            pygame.time.wait(100)
+            if self.defined_volume != -1:
+                self.set_volume(self.defined_volume)
+            else:
+                self.set_volume(0.2)
+            pygame.mixer.music.play()  # plays music
 
-        # ---------- Finished Music ----------
-        self.finished_music_signal.emit()
+            # ---------- Waits for the music to end ----------
+            while pygame.mixer.music.get_busy() or self.music_is_paused:
+                pygame.time.wait(100)
+
+            # ---------- Finished Music ----------
+            self.finished_music_signal.emit()
 
         pass
 
@@ -2055,23 +2058,31 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
     def continue_button_clicked(self):
         global new_record
+        global current_user_bpd_progress
 
-        self.nextWindow = MusicsWindow()
+        if current_user_bpd_progress != 100:
+            self.nextWindow = MusicsWindow()
 
-        success, frames = self.nextWindow.emotion_thread.video.read()
-        if not success:
-            QMessageBox.information(
-                self, "Error", "Your camera is not properly working,\n please fix that and try again",
-                QMessageBox.Ok,
-            )
+            success, frames = self.nextWindow.emotion_thread.video.read()
+            if not success:
+                QMessageBox.information(
+                    self, "Error", "Your camera is not properly working,\n please fix that and try again",
+                    QMessageBox.Ok,
+                )
+            else:
+                self.nextWindow.music_playing = True
+                self.nextWindow.switch_layout()
+                music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
+
+                new_record['music_name'] = music_name
+                self.nextWindow.show()
+                self.close()
         else:
-            self.nextWindow.music_playing = True
+            self.nextWindow = MusicsWindow()
             self.nextWindow.switch_layout()
-            music_name = self.nextWindow.pick_next_music_to_play_in_BDP()
-
-            new_record['music_name'] = music_name
             self.nextWindow.show()
             self.close()
+
 
     def select_mp3_file(self):
         file_dialog = QFileDialog()
@@ -2912,10 +2923,11 @@ class TrainThread(QThread):
             _, model = train(x_train, y_train, learning_rate, num_units, dropout_rate, epochs, batch_size)
 
             # Evaluate the model using the test data
-            metric = model.evaluate(x_test, y_test)[0]
+            evaluation_results = model.evaluate(x_test, y_test)
+            mape = evaluation_results[model.metrics_names.index('mean_absolute_percentage_error')]
 
             # Return the test metric as the objective value to be optimized (minimized)
-            return metric
+            return mape
 
         with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
             # 1. Get normalized dataset of username
