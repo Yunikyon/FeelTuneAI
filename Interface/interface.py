@@ -2289,7 +2289,6 @@ class QuadrantWidget(QWidget):
             else:
                 global rated_emotion
                 rated_emotion = [normalized_x, normalized_y]
-                print(rated_emotion)
 
             self.update()
 
@@ -2317,55 +2316,67 @@ class QuadrantWidget(QWidget):
         metrics = QFontMetrics(font)
 
         # Quadrant 1
-        quadrant1_label = "Sad"
-        bored_label = "Bored"
-        tired_label = "Tired"
+        sad_label = "Sad"
+        depressed_label = "Depressed"
+        lethargic_label = "Lethargic"
+        fatigued_label = "Fatigued"
         # Quadrant 2
-        sleepy_label = "Sleepy"
-        quadrant2_label = "Calm"
-        pleased_label = "Pleased"
+        calm_label = "Calm"
+        relaxed_label = "Relaxed"
+        serene_label = "Serene"
+        contented_label = "Contented"
         # Quadrant 3
-        frustrated_label = "Frustrated"
-        annoyed_label = "Annoyed"
-        quadrant3_label = "Angry"
+        tense_label = "Tense"
+        nervous_label = "Nervous"
+        stressed_label = "Stressed"
+        upset_label = "Upset"
         # Quadrant 4
-        aroused_label = "Aroused"
+        alert_label = "Alert"
         excited_label = "Excited"
-        quadrant4_label = "Happy"
+        elated_label = "Elated"
+        happy_label = "Happy"
 
         # Quadrant 1
-        quadrant1_pos = QPoint(10, height - metrics.height() - 120)
-        bored_pos = QPoint(35, height - metrics.height() - 45)
-        tired_pos = QPoint(130, height - metrics.height())
+        sad_pos = QPoint(0, height - metrics.height() - 140)
+        depressed_pos = QPoint(0, height - metrics.height() - 90)
+        lethargic_pos = QPoint(35, height - metrics.height() - 34)
+        fatigued_pos = QPoint(110, height - metrics.height() + 10)
         # Quadrant 2
-        sleepy_pos = QPoint(width - metrics.width(quadrant2_label) - 130, height - metrics.height())
-        quadrant2_pos = QPoint(width - metrics.width(quadrant2_label) - 35, height - metrics.height() - 45)
-        pleased_pos = QPoint(width - metrics.width(quadrant2_label) - 30, height - metrics.height() - 120)
+        calm_pos = QPoint(width - metrics.width(contented_label) - 90, height - metrics.height() + 10)
+        relaxed_pos = QPoint(width - metrics.width(contented_label) - 30, height - metrics.height() - 32)
+        serene_pos = QPoint(width - metrics.width(contented_label) + 7, height - metrics.height() - 85)
+        contented_pos = QPoint(width - metrics.width(contented_label) - 0, height - metrics.height() - 140)
         # Quadrant 3
-        frustrated_pos = QPoint(90, 30)
-        annoyed_pos = QPoint(30, 85)
-        quadrant3_pos = QPoint(10, 160)
+        tense_pos = QPoint(120, 20)
+        nervous_pos = QPoint(40, 55)
+        stressed_pos = QPoint(10, 110)
+        upset_pos = QPoint(0, 170)
         # Quadrant 4
-        aroused_pos = QPoint(width - metrics.width(quadrant4_label) - 120, 30)
-        excited_pos = QPoint(width - metrics.width(quadrant4_label) - 35, 85)
-        quadrant4_pos = QPoint(width - metrics.width(quadrant4_label) - 10, 160)
+        alert_pos = QPoint(width - metrics.width(excited_label) - 110, 20)
+        excited_pos = QPoint(width - metrics.width(excited_label) - 55, 55)
+        elated_pos = QPoint(width - metrics.width(excited_label) - 5, 110)
+        happy_pos = QPoint(width - metrics.width(excited_label) - 0, 170)
 
         # Quadrant 1
-        painter.drawText(quadrant1_pos, quadrant1_label)
-        painter.drawText(bored_pos, bored_label)
-        painter.drawText(tired_pos, tired_label)
+        painter.drawText(sad_pos, sad_label)
+        painter.drawText(depressed_pos, depressed_label)
+        painter.drawText(lethargic_pos, lethargic_label)
+        painter.drawText(fatigued_pos, fatigued_label)
         # Quadrant 2
-        painter.drawText(sleepy_pos, sleepy_label)
-        painter.drawText(quadrant2_pos, quadrant2_label)
-        painter.drawText(pleased_pos, pleased_label)
+        painter.drawText(calm_pos, calm_label)
+        painter.drawText(relaxed_pos, relaxed_label)
+        painter.drawText(serene_pos, serene_label)
+        painter.drawText(contented_pos, contented_label)
         # Quadrant 3
-        painter.drawText(frustrated_pos, frustrated_label)
-        painter.drawText(annoyed_pos, annoyed_label)
-        painter.drawText(quadrant3_pos, quadrant3_label)
+        painter.drawText(tense_pos, tense_label)
+        painter.drawText(nervous_pos, nervous_label)
+        painter.drawText(stressed_pos, stressed_label)
+        painter.drawText(upset_pos, upset_label)
         # Quadrant 4
-        painter.drawText(aroused_pos, aroused_label)
+        painter.drawText(alert_pos, alert_label)
         painter.drawText(excited_pos, excited_label)
-        painter.drawText(quadrant4_pos, quadrant4_label)
+        painter.drawText(elated_pos, elated_label)
+        painter.drawText(happy_pos, happy_label)
 
         # Draw the image as the point
         point_size = 85
