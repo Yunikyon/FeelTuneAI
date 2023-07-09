@@ -26,6 +26,7 @@ from tensorflow.python.keras import optimizers
 from tensorflow.python.keras.models import model_from_json
 import optuna
 import optuna.visualization as vis
+import matplotlib.pyplot as plt
 
 import context.main as contextMain
 from EmotionRecognition.EmotionDetection import capture_emotion
@@ -1378,6 +1379,26 @@ class MusicsWindow(QMainWindow):
 
             # Find the index of the closest point to the new point
             distance, index = nbrs.kneighbors(new_point)
+
+            # Plotting the data points
+            plt.scatter(valence_arousal_pairs['music_valence'].values, valence_arousal_pairs['music_arousal'].values,
+                        label='Existing Points')
+            plt.scatter(predicted_valence, predicted_arousal, c='red', marker='x', label='New Point')
+            plt.scatter(valence_arousal_pairs.iloc[index[0]]['music_valence'].values,
+                        valence_arousal_pairs.iloc[index[0]]['music_arousal'].values, c='green', marker='o',
+                        label='Closest Point')
+
+            plt.xlabel('Valence')
+            plt.ylabel('Arousal')
+            plt.title('Nearest Neighbors')
+
+            # Connect the new point to the closest point
+            plt.plot([predicted_valence, valence_arousal_pairs.iloc[index[0]]['music_valence'].values[0]],
+                     [predicted_arousal, valence_arousal_pairs.iloc[index[0]]['music_arousal'].values[0]],
+                     'r--', label='Connecting Line')
+
+            plt.legend()
+            plt.show()
 
             # 6. Get name of the music to play -> music with the minimum distance
             music_name = application_music_names[index[0][0]]
