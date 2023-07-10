@@ -9,12 +9,10 @@ import pandas as pd
 import librosa
 from keras import Model
 from keras.optimizers import SGD
-from sklearn.svm import SVR, NuSVR
 from sklearn.model_selection import train_test_split
 from keras.layers import Input, Dense, Dropout
 import optuna.visualization as vis
-from sklearn.metrics import mean_squared_error
-import joblib
+from sklearn import metrics
 
 
 class Bcolors:
@@ -114,7 +112,6 @@ def build_model():
 
     # --- Extract Common features using librosa
     # Mel-frequency cepstral coefficients (MFCCs)
-    # TODO - define fmin and fmax - but see first the average
     mfcc = np.array([librosa.feature.mfcc(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
                                           sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
                      for file in dataset["Music_name"]])
@@ -124,7 +121,6 @@ def build_model():
     print("Mfcc done!")
 
     # Spectral centroid
-    # TODO - define fmin and fmax - but see first the average
     cent = np.array(
         [librosa.feature.spectral_centroid(y=librosa.load('MuVi_musics/' + file, duration=150)[0]) for file in
          dataset["Music_name"]])
@@ -133,8 +129,6 @@ def build_model():
     cent = np.around(np.interp(cent, (0, 8550), (0, 1)), decimals=3)
     print("cent done!")
 
-    # TODO - Acho que Range: [0; 1]
-    # TODO - normalizar para 3 casas decimais
     # Zero-crossing rate
     zcr = np.array(
         [librosa.feature.zero_crossing_rate(y=librosa.load('MuVi_musics/' + file, duration=150)[0]) for file in
@@ -147,8 +141,6 @@ def build_model():
 
     # --- Extract Valence features using librosa
     # Chroma features
-    # TODO - Acho que Range: [0; 1]
-    # TODO - normalizar para 3 casas decimais
     chroma_cqt = np.array(
         [librosa.feature.chroma_cqt(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
                                     sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
@@ -158,8 +150,6 @@ def build_model():
     chroma_cqt = np.around(chroma_cqt, decimals=3)
     print("Chroma_cqt done!")
 
-    # Range: [0; 1]
-    # TODO - normalizar para 3 casas decimais
     chroma_stft = np.array(
         [librosa.feature.chroma_stft(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
                                      sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
@@ -169,8 +159,6 @@ def build_model():
     chroma_stft = np.around(chroma_stft, decimals=3)
     print("chroma_stft done!")
 
-    # Range: [0; 1]
-    # TODO - normalizar para 3 casas decimais
     chroma_cens = np.array(
         [librosa.feature.chroma_cens(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
                                      sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
@@ -181,7 +169,6 @@ def build_model():
     print("chroma_cens done!")
 
     # Spectral rolloff
-    # TODO - define min and max - but see first the average
     rolloff = np.array(
         [librosa.feature.spectral_rolloff(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
                                           sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
@@ -193,7 +180,6 @@ def build_model():
 
     # --- Extract Arousal features using librosa
     # Spectral contrast
-    # TODO - define fmin and fmax - but see first the average - I think it goes from 0 to 65
     spectral_contrast = np.array(
         [librosa.feature.spectral_contrast(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
                                            sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
@@ -226,17 +212,24 @@ def build_model():
     print("Train and test split...")
     # Split data into training and testing sets for Valence
     x_train_valence, x_test_valence, y_train_valence, y_test_valence = train_test_split(dataframe_valence, y_valence,
-                                                                                        test_size=0.2, random_state=42)
+                                                                                        test_size=0.25, random_state=42)
     x_train_arousal, x_test_arousal, y_train_arousal, y_test_arousal = train_test_split(dataframe_arousal, y_arousal,
-                                                                                        test_size=0.2, random_state=42)
+                                                                                        test_size=0.25, random_state=42)
+
+    # Split data into training and validation sets for Valence
+    x_train_valence, x_val_valence, y_train_valence, y_val_valence = train_test_split(x_train_valence, y_train_valence,
+                                                                                        test_size=0.25, random_state=42)
+    x_train_arousal, x_val_arousal, y_train_arousal, y_val_arousal = train_test_split(x_train_arousal, y_train_arousal,
+                                                                                        test_size=0.25, random_state=42)
 
     # --- Valence Model With Optuna
+    print(f"Training Valence...")
     study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
-    study.optimize(lambda trial: objective(trial, x_train_valence, y_train_valence,
-                                           'valence'), n_trials=150)
+    study.optimize(lambda trial: objective(trial, x_train_valence, x_test_valence, x_val_valence,
+                                           y_train_valence, y_test_valence, y_val_arousal,
+                                           'valence'), n_trials=2)
 
     # Plot and save the optimization history
-    optuna_history = study.trials_dataframe()
     fig = vis.plot_optimization_history(study)
     fig.update_layout(title="Valence Optimization History", yaxis_title="MAPE")
     fig.write_image("./Optuna_History_images/valence_optuna_history.png")
@@ -253,34 +246,28 @@ def build_model():
     best_epochs = best_trial.params['epochs']
     best_batch_size = best_trial.params['batch_size']
 
-    best_metric_valence, best_model_valence = train_model(x_train_valence, y_train_valence, 'valence',
+    best_metric_valence, best_model_valence = train_model(x_train_valence, x_test_valence, x_val_valence,
+                                                          y_train_valence, y_test_valence, y_val_valence, 'valence',
                                                           best_learning_rate, best_num_units, best_dropout_rate,
                                                           best_epochs, best_batch_size)
 
     # best_metric_valence, best_model_valence = train_model(x_train_valence, y_train_valence, 'valence',
     #                                                       0.0007587243085528094, 282, 0.0004096418070471742)
 
-    print('Best value: {:.5f}'.format(best_metric_valence))
-    # print('Best parameters: {}'.format(best_trial.params))
-
-    # 5. Evaluate the model on the test data
-    evaluation_results = best_model_valence.evaluate(x_test_valence, y_test_valence)
-
-    # Print the metric values during evaluation
-    print(f"Valence evaluation results: ")
-    for metric_name, metric_value in zip(best_model_valence.metrics_names, evaluation_results):
-        print(metric_name + ": " + str(metric_value))
+    print('Best validation MAPE value: {:.5f}'.format(best_metric_valence))
+    print('Best parameters: {}'.format(best_trial.params))
 
     # Save the best model
     best_model_valence.save("../models/valence_model.h5")
 
     # --- Arousal Model With Optuna
+    print(f"Training Arousal...")
     study_arousal = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
-    study_arousal.optimize(lambda trial: objective(trial, x_train_arousal, y_train_arousal, 'arousal'),
-                           n_trials=150)
+    study_arousal.optimize(lambda trial: objective(trial, x_train_arousal, x_test_arousal, x_val_arousal,
+                                                   y_train_arousal, y_test_arousal, y_val_arousal, 'arousal'),
+                           n_trials=2)
 
     # Plot and save the optimization history
-    # optuna_history = study.trials_dataframe()
     fig_arousal = vis.plot_optimization_history(study_arousal)
     fig_arousal.update_layout(title="Arousal Optimization History", yaxis_title="MAPE")
     fig_arousal.write_image("./Optuna_History_images/arousal_optuna_history.png")
@@ -307,21 +294,13 @@ def build_model():
     #                                                       0.2841357947811655)
 
     print('Best value: {:.5f}'.format(best_metric_arousal))
-    # print('Best parameters: {}'.format(best_trial_arousal.params))
-
-    # 5. Evaluate the model on the test data
-    evaluation_results = best_model_arousal.evaluate(x_test_arousal, y_test_arousal)
-
-    # Print the metric values during evaluation
-    print(f"Arousal evaluation results: ")
-    for metric_name, metric_value in zip(best_model_arousal.metrics_names, evaluation_results):
-        print(metric_name + ": " + str(metric_value))
+    print('Best parameters: {}'.format(best_trial_arousal.params))
 
     # Save the best mode
     best_model_arousal.save("../models/arousal_model.h5")
 
 
-def objective(trial, x_train, y_train, characteristic):
+def objective(trial, x_train, x_test, x_val, y_train, y_test, y_val, characteristic):
     # Define the hyperparameters to be optimized
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
     num_units = trial.suggest_int('num_units', 32, 512)
@@ -330,15 +309,15 @@ def objective(trial, x_train, y_train, characteristic):
     epochs = trial.suggest_int('epochs', 50, 200)
 
     # Train the model and obtain the validation metric
-    metric, _ = train_model(x_train, y_train, characteristic, learning_rate, num_units, dropout_rate, epochs,
-                            batch_size)
+    metric, _ = train_model(x_train, x_test, x_val, y_train, y_test, y_val, characteristic, learning_rate,
+                            num_units, dropout_rate, epochs, batch_size)
 
     # Return the validation metric as the objective value to be optimized (minimized)
     return metric
 
 
-def train_model(x_train, y_train, characteristic, learning_rate, num_units, dropout_rate, epochs, batch_size):
-    print(f"Training {characteristic}...")
+def train_model(x_train, x_test, x_val, y_train, y_test, y_val, characteristic, learning_rate, num_units, dropout_rate,
+                epochs, batch_size):
     # Define the input shape
     input_shape = (x_train.shape[1],)
 
@@ -362,17 +341,23 @@ def train_model(x_train, y_train, characteristic, learning_rate, num_units, drop
     # Train the model«
     history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
 
-    # plt.plot(history.history['loss'])
-    # plt.plot(history.history['mean_absolute_percentage_error'])
-    # plt.title('Model Training History')
-    # plt.xlabel('Epoch')
-    # plt.ylabel('Value')
-    # plt.legend(['Loss', 'Mean Absolute Percentage Error'], loc='upper right')
-    # plt.savefig(f'{characteristic}_training_history.png')
-    # plt.close()
+    print(f"Train MSE: {history.history['loss'][-1]}")
+    print(f"Train MAPE: {history.history['mean_absolute_percentage_error'][-1]}")
+
+    # Evaluate the model using the test data
+    evaluation_results = model.evaluate(x_test, y_test)
+    print(f"Test MSE: {evaluation_results[model.metrics_names.index('loss')]}")
+    print(f"Test MAPE: {evaluation_results[model.metrics_names.index('mean_absolute_percentage_error')]}")
+
+    # Validate the model using the validation data
+    y_pred = model.predict(x_val)
+    mse = metrics.mean_squared_error(y_val, y_pred)
+    mape = metrics.mean_absolute_percentage_error(y_val, y_pred)
+    print(f"Validation MSE: {mse}")
+    print(f"Validation MAPE: {mape}")
 
     # Return the metric values for each epoch during training
-    return history.history['mean_absolute_percentage_error'][-1], model
+    return mape, model
 
 
 # download_mu_vi_musics()
