@@ -227,7 +227,7 @@ def build_model():
     study = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
     study.optimize(lambda trial: objective(trial, x_train_valence, x_test_valence, x_val_valence,
                                            y_train_valence, y_test_valence, y_val_arousal,
-                                           'valence'), n_trials=2)
+                                           'valence'), n_trials=150)
 
     # Plot and save the optimization history
     fig = vis.plot_optimization_history(study)
@@ -256,7 +256,7 @@ def build_model():
 
     print('Best validation MAPE value: {:.5f}'.format(best_metric_valence))
     print('Best parameters: {}'.format(best_trial.params))
-
+    #
     # Save the best model
     best_model_valence.save("../models/valence_model.h5")
 
@@ -265,7 +265,7 @@ def build_model():
     study_arousal = optuna.create_study(direction='minimize')  # or 'maximize' if optimizing accuracy
     study_arousal.optimize(lambda trial: objective(trial, x_train_arousal, x_test_arousal, x_val_arousal,
                                                    y_train_arousal, y_test_arousal, y_val_arousal, 'arousal'),
-                           n_trials=2)
+                           n_trials=150)
 
     # Plot and save the optimization history
     fig_arousal = vis.plot_optimization_history(study_arousal)
@@ -281,10 +281,11 @@ def build_model():
     best_learning_rate_arousal = best_trial_arousal.params['learning_rate']
     best_num_units_arousal = best_trial_arousal.params['num_units']
     best_dropout_rate_arousal = best_trial_arousal.params['dropout_rate']
-    best_epochs_arousal = best_trial.params['epochs']
-    best_batch_size_arousal = best_trial.params['batch_size']
+    best_epochs_arousal = best_trial_arousal.params['epochs']
+    best_batch_size_arousal = best_trial_arousal.params['batch_size']
 
-    best_metric_arousal, best_model_arousal = train_model(x_train_arousal, y_train_arousal, 'arousal',
+    best_metric_arousal, best_model_arousal = train_model(x_train_arousal, x_test_arousal, x_val_arousal,
+                                                          y_train_arousal, y_test_arousal, y_val_arousal, 'arousal',
                                                           best_learning_rate_arousal, best_num_units_arousal,
                                                           best_dropout_rate_arousal, best_epochs_arousal,
                                                           best_batch_size_arousal)
@@ -352,7 +353,7 @@ def train_model(x_train, x_test, x_val, y_train, y_test, y_val, characteristic, 
     # Validate the model using the validation data
     y_pred = model.predict(x_val)
     mse = metrics.mean_squared_error(y_val, y_pred)
-    mape = metrics.mean_absolute_percentage_error(y_val, y_pred)
+    mape = metrics.mean_absolute_percentage_error(y_val, y_pred)*100
     print(f"Validation MSE: {mse}")
     print(f"Validation MAPE: {mape}")
 
