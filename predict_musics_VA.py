@@ -123,12 +123,12 @@ def predict_music_directory_emotions(directory, csv_name):
 
     print("Predicting valence...")
     # Use the trained model to make predictions
-    valence_model = keras.models.load_model(f'./models/valence_model_two.h5')
+    valence_model = keras.models.load_model(f'./models/valence_model.h5')
     predicted_valence = valence_model.predict(dataframe_valence)
     valence = np.around(np.interp(predicted_valence, (0, 1), (-1, 1)), decimals=3)
 
     print("Predicting arousal...")
-    arousal_model = keras.models.load_model(f'./models/arousal_model_two.h5')
+    arousal_model = keras.models.load_model(f'./models/arousal_model.h5')
     predicted_arousal = arousal_model.predict(dataframe_arousal)
     arousal = np.around(np.interp(predicted_arousal, (0, 1), (-1, 1)), decimals=3)
 
@@ -271,7 +271,7 @@ def predict_uploaded_music_emotions(directory, file, csv_name):
 
 
 if __name__ == '__main__':
-    predict_music_directory_emotions('./BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va_3')
+    predict_music_directory_emotions('./BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va_2')
 
 # predict_uploaded_music_emotions('./BuildingDatasetPhaseMusics', 'Avril Lavigne - Girlfriend (Official Video).mp3', 'building_dataset_phase_musics_va')
 

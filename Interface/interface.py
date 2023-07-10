@@ -212,7 +212,7 @@ def get_context():
 
 def merge_musics_va_to_dataset(dataset):
     delimiter = '~~~'
-    with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
+    with open('../building_dataset_phase_musics_va_2.csv', 'r') as file_obj:
         try:
             musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
         except pd.errors.ParserError:
