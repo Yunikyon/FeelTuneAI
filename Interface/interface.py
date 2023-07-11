@@ -1,5 +1,4 @@
 import csv
-import math
 import os
 import shutil
 import warnings
@@ -42,7 +41,7 @@ is_in_building_dataset_phase = True
 current_user_bpd_progress = 0
 music_files_bdp_length = 0
 has_user_finished_first_iteration_of_bdp = False
-musics_listened_by_current_user = [] # To choose what music to play next
+musics_listened_by_current_user = []  # To choose what music to play next
 musics_listened_by_current_user_in_current_session = []
 last_context_data = ""
 last_time_context_data_was_called = ""
@@ -54,7 +53,7 @@ current_music_emotions = ''
 new_record = {'date': '', 'initial_emotion': '', 'music_name': '', 'last_emotion': '', 'rated_emotion': '',
               'instant_seconds|percentages|dominant_emotion': ''}
 
-goal_emotion = None
+goal_emotion = [0, 0]
 rated_emotion = None
 valence_arousal_pairs = None
 application_music_names = None
@@ -154,6 +153,12 @@ def confirm_warning(self, title, message):
         QMessageBox.Yes | QMessageBox.No,
     )
     return reply
+
+def information_box(self, title, message):
+    QMessageBox.information(
+        self, title, message,
+        QMessageBox.Ok,
+    )
 
 def convert_emotions_to_va_values(emotion):
     # Example -> 6|45.581-0.0-0.0-1.344-47.149-0.0-5.925|sad
@@ -277,17 +282,17 @@ def one_hot_encoding(filtered_df, filtered_df_column_name, predefined_columns):
 
     return one_hot_encoded
 
-def normalize_dataset(filtered_df):
+def normalize_dataset(self, filtered_df):
     global is_training_model
+
+    if filtered_df is None:
+        information_box(self, "Error", "Dataset to normalize is empty.")
+        return
 
     if is_training_model:  # if training, not predicting
         filtered_df = filtered_df.drop(labels=['username', 'last_emotion'], axis=1)
         filtered_df = merge_musics_va_to_dataset(filtered_df)
         filtered_df = filtered_df.drop(labels=['music_name'], axis=1)
-
-    if filtered_df is None:
-        # TODO - mostrar erro
-        return
 
     mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
     mode_imputer = SimpleImputer(missing_values=np.nan, strategy='most_frequent')
@@ -678,9 +683,6 @@ class MusicsWindow(QMainWindow):
                 print(f"{Bcolors.WARNING} BDP music files length is zero" + Bcolors.ENDC)
                 exit()
         else:  # Read application musics
-
-            # TODO - é recolher contexto, emoção atual da pessoa,
-            #  emoção desejada da pessoa para escolher a música, baseado no treino da rede neuronal :)
             # Add personalized application user musics to base musics
             if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
                 personalized_directory = f'../personalized_musics/{current_user_name}/application_musics'
@@ -1355,7 +1357,7 @@ class MusicsWindow(QMainWindow):
 
             # 3. Get normalized dataframe
             df = pd.DataFrame(new_dict, index=[0])
-            filtered_df = normalize_dataset(df)
+            filtered_df = normalize_dataset(self, df)
 
             # 4. Predict valence and arousal
             model = keras.models.load_model(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5')
@@ -1585,14 +1587,12 @@ class MusicsWindow(QMainWindow):
         self.is_rating_music = False
         musics_listened_by_current_user.append(new_record['music_name'])
         musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
-        current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length) # Regra 3 simples para ver progresso atual
+        current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length)  # Regra 3 simples para ver progresso atual
         self.progress_slider_animation.setValue(current_user_bpd_progress)
         self.progress_slider_play_next.setValue(current_user_bpd_progress)
         self.switch_layout()
         current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
 
-
-        # TODO - alterar new_record['instant_seconds|percentages|dominant_emotion'] consoante rated emotion
         new_dict = {'username': current_user_name.lower(), 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
                     'music_name': new_record['music_name'],
                     'last_emotion': new_record['last_emotion'],
@@ -1693,7 +1693,7 @@ class MusicsWindow(QMainWindow):
                 music_name = self.choose_next_application_music()
 
                 if not music_name:
-                    # TODO - mostrar erro
+                    information_box(self, "Error", "Music name missing.")
                     return
 
                 music_full_path = self.music_thread.set_music(music_name)
@@ -1725,7 +1725,7 @@ class MusicsWindow(QMainWindow):
             df = df[df['username'] == current_user_name.lower()]
 
             # Normalize dataframe
-            filtered_df = normalize_dataset(df)
+            filtered_df = normalize_dataset(self, df)
 
             # Save BDP normalized dataset
             filtered_df.to_csv(f'../{current_user_name.lower()}_normalized_dataset.csv', index=False)
@@ -2160,6 +2160,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         self.setDisabled(True)
 
         if file is None:
+            self.setDisabled(False)
             return
 
         # ---------- Uploads music ----------
@@ -2184,10 +2185,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
                 for music in musics:
                     if music == file_name:
                         self.setDisabled(False)
-                        QMessageBox.information(
-                            self, "Success", "Music was previously uploaded!",
-                            QMessageBox.Ok,
-                        )
+                        information_box(self, "Success", "Music was previously uploaded!")
                         return
             shutil.copy2(file, folder_name)
             file_name = file.split('/')[-1]
@@ -2250,6 +2248,31 @@ class QuadrantWidget(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.point = event.pos()
+
+            # Calculate normalized Arousal [-1, 1]
+            normalized_x = round(2 * (self.point.x() / self.width()) - 1, 3)
+            if normalized_x < 0:
+                normalized_x = round(normalized_x - 0.06, 3)
+            else:
+                if normalized_x > 0:
+                    normalized_x = round(normalized_x + 0.06, 3)
+
+            # Calculate normalized Valence [-1, 1]
+            normalized_y = round(-(2 * (self.point.y() / self.height()) - 1), 3)
+            if normalized_y < 0:
+                normalized_y = round(normalized_y - 0.12, 3)
+            else:
+                if normalized_y > 0:
+                    normalized_y = round(normalized_y + 0.06, 3)
+
+            if self.is_goal_emotion:
+                global goal_emotion
+                goal_emotion = [normalized_x, normalized_y]
+                print(goal_emotion)
+            else:
+                global rated_emotion
+                rated_emotion = [normalized_x, normalized_y]
+
             self.update()
 
     def mouseMoveEvent(self, event):
@@ -2281,6 +2304,7 @@ class QuadrantWidget(QWidget):
             if self.is_goal_emotion:
                 global goal_emotion
                 goal_emotion = [normalized_x, normalized_y]
+                print(goal_emotion)
             else:
                 global rated_emotion
                 rated_emotion = [normalized_x, normalized_y]
@@ -2525,7 +2549,7 @@ class ApplicationHomeScreen(QMainWindow):
                 musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
 
         if musics_df is None:
-            # TODO - mostrar erro
+            information_box(self, "Error", "Application has no musics.")
             return
 
         global valence_arousal_pairs
@@ -2537,7 +2561,7 @@ class ApplicationHomeScreen(QMainWindow):
         music_name = self.nextWindow.choose_next_application_music()
 
         if not music_name:
-            # TODO - mostrar erro
+            information_box(self, "Error", "Music name missing.")
             return
 
         music_full_path = self.nextWindow.music_thread.set_music(music_name)
@@ -2756,7 +2780,6 @@ class TrainingModelScreen(QMainWindow):
             if reply == QMessageBox.Yes:
                 global is_training_model
                 if is_training_model:
-                    # TODO - quando o user fecha mas ainda se está a treinar o modelo
                     quit(0)
 
                 quit(0)
