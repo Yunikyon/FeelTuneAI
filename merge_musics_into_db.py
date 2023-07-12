@@ -32,11 +32,12 @@ for _, row in musics_df.iterrows():
     valence = row['music_valence']
     arousal = row['music_arousal']
 
-    cursor.execute('''
-        INSERT INTO musics (name, valence, arousal)
-        VALUES (?, ?, ?)
-    ''', (music_name, valence, arousal))
-    music_id = cursor.lastrowid
+    # cursor.execute('''
+    #     INSERT INTO musics (name, valence, arousal)
+    #     VALUES (?, ?, ?)
+    # ''', (music_name, valence, arousal))
+    cursor.execute('SELECT id FROM musics WHERE name = ?', (music_name,))
+    music_id = cursor.fetchone()[0]
 
     cursor.execute('''
         INSERT INTO user_musics (user_id, music_id)

@@ -2,6 +2,8 @@ from __future__ import unicode_literals
 
 import csv
 import os
+import sqlite3
+
 import numpy as np
 import librosa
 import joblib
@@ -145,7 +147,7 @@ def predict_music_directory_emotions(directory, csv_name):
             csv_file.write(l + '\n')
             i += 1
 
-def predict_uploaded_music_emotions(directory, file, csv_name):
+def predict_uploaded_music_emotions(directory, file, csv_name, user_uploaded=None):
     # Extract Common features using librosa
     # Mel-frequency cepstral coefficients (MFCCs)
     mfcc = np.array([librosa.feature.mfcc(y=librosa.load(directory + '/' + file, duration=150)[0], sr=44100)])
@@ -257,17 +259,31 @@ def predict_uploaded_music_emotions(directory, file, csv_name):
     x_arousal = np.concatenate((mfcc_arousal, cent_arousal, zcr_arousal, spectral_contrast), axis=2).reshape(1, -1)
 
     # Use the trained model to make predictions
-    valence_model = joblib.load('./models/svm_valence_classifier.pkl')
+    valence_model = joblib.load('../models/svm_valence_classifier.pkl')
     valence = valence_model.predict(x_valence)
 
-    arousal_model = joblib.load('./models/svm_arousal_classifier.pkl')
+    arousal_model = joblib.load('../models/svm_arousal_classifier.pkl')
     arousal = arousal_model.predict(x_arousal)
 
     # Write to csv
-    with open(f'{csv_name}.csv', 'a', newline='', encoding="utf-8") as csv_file:
-        delimiter = '~~~'
-        l = delimiter.join([file, str(round(valence[0], 3)), str(round(arousal[0], 3))])
-        csv_file.write(l + '\n')
+    # with open(f'{csv_name}.csv', 'a', newline='', encoding="utf-8") as csv_file:
+    #     delimiter = '~~~'
+    #     l = delimiter.join([file, str(round(valence[0], 3)), str(round(arousal[0], 3))])
+    #     csv_file.write(l + '\n')
+
+    conn = sqlite3.connect('../feeltune.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO musics (name, valence, arousal) VALUES (?, ?, ?)", (file, round(valence[0], 3), round(arousal[0], 3)))
+    music_id = cursor.lastrowid
+    if user_uploaded is None:
+        user_id = 0
+    else:
+        cursor.execute("SELECT id FROM users WHERE name = ?", (user_uploaded,))
+        user_id = cursor.fetchone()[0]
+    cursor.execute("INSERT INTO user_musics (user_id, music_id) VALUES (?, ?)", (user_id, music_id))
+
+    conn.commit()
+    conn.close()
 
 
 if __name__ == '__main__':

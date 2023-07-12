@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLa
     QHBoxLayout, QSlider, QMessageBox, QStackedWidget, QFileDialog
 from numpy.core.defchararray import strip
 import random
+import sqlite3
 
 from download_from_yt import download_musics, download_musics_from_csv
 from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
@@ -42,7 +43,7 @@ current_user_bpd_progress = 0
 music_files_bdp_length = 0
 has_user_finished_first_iteration_of_bdp = False
 musics_listened_by_current_user = []  # To choose what music to play next
-musics_listened_by_current_user_in_current_session = []
+musics_listened_by_current_user_in_current_session = [] # To save the musics listened by the user in the current session
 last_context_data = ""
 last_time_context_data_was_called = ""
 last_application_music_played = ""
@@ -216,15 +217,21 @@ def get_context():
 
 
 def merge_musics_va_to_dataset(dataset):
-    delimiter = '~~~'
-    with open('../building_dataset_phase_musics_va_2.csv', 'r') as file_obj:
-        try:
-            musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
-        except pd.errors.ParserError:
-            musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
-    dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
+    # delimiter = '~~~'
+    # with open('../building_dataset_phase_musics_va_2.csv', 'r', encoding='utf-8') as file_obj:
+    #     try:
+    #         musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
+    #     except pd.errors.ParserError:
+    #         musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
+    # dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
 
-    for index,row in dataset.iterrows():
+    conn = sqlite3.connect('../feeltune.db')
+    musics_df = pd.read_sql_query("SELECT name, valence AS music_valence, arousal AS music_arousal FROM musics", conn)
+    dataset = pd.merge(dataset, musics_df, left_on='music_name', right_on='name', how='left')
+    conn.close()
+
+    dataset = dataset.drop(columns=['name'], axis=1)
+    for index, row in dataset.iterrows():
         dataset.at[index, 'music_valence'] = convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_valence'])
         dataset.at[index, 'music_arousal'] = convert_to_new_range(-1, 1, 0, 1, dataset.at[index, 'music_arousal'])
 
@@ -595,28 +602,47 @@ class LoginWindow(QMainWindow):
         global is_in_building_dataset_phase
         global current_user_bpd_progress
 
-        progress = 0
-        aux_musics_listened_previously = ''
-        file_exists = os.path.isfile('../users.csv')
+        # progress = 0
+        # aux_musics_listened_previously = ''
+        # file_exists = os.path.isfile('../users.csv')
 
-        # Read user's save information
-        if file_exists:
-            with open('../users.csv', 'r', encoding='utf-8') as file:
-                for i, line in enumerate(file):
-                    if i == 0:
-                        continue
-                    line_content = line.split('~~~')
-                    user_name = line_content[0]
-                    if user_name == current_user_name.lower():
-                        progress = int(line_content[1])
-                        aux_musics_listened_previously = line_content[2]
-                        break
+        conn = sqlite3.connect('../feeltune.db')
+        cursor = conn.cursor()
+
+        # Read user information, if it exists
+        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+        user = cursor.fetchone()
+        if user is not None:
+            progress = user[2]
+            cursor.execute(f"SELECT musics.name FROM musics_listened "
+                           f"JOIN musics  ON musics_listened.music_id = musics.id "
+                           f"WHERE user_id = {user[0]}")
+            result = cursor.fetchall() # Returns a list of tuples (music_name,)
+            musics_listened_by_current_user = [row[0] for row in result]
+        else:
+            cursor.execute("INSERT INTO users (name, progress) VALUES (?, 0)", (current_user_name,))
+            conn.commit()
+            progress = 0
+            musics_listened_by_current_user = []
+
+        # Read user's saved information
+        # if file_exists:
+        #     with open('../users.csv', 'r', encoding='utf-8') as file:
+        #         for i, line in enumerate(file):
+        #             if i == 0:
+        #                 continue
+        #             line_content = line.split('~~~')
+        #             user_name = line_content[0]
+        #             if user_name == current_user_name.lower():
+        #                 progress = int(line_content[1])
+        #                 aux_musics_listened_previously = line_content[2]
+        #                 break
 
         if progress == 100 and os.path.isfile(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5'):
             is_in_building_dataset_phase = False
 
-        if aux_musics_listened_previously != '':
-            musics_listened_by_current_user = aux_musics_listened_previously.replace('\n', '').split('___')
+        # if aux_musics_listened_previously != '':
+        #     musics_listened_by_current_user = aux_musics_listened_previously.replace('\n', '').split('___')
 
         current_user_bpd_progress = progress
 
@@ -653,16 +679,18 @@ class MusicsWindow(QMainWindow):
         self.music_is_paused = False
 
         # Music Thread Initialization
-        if is_in_building_dataset_phase:
-            musics_directory = '../BuildingDatasetPhaseMusics'
-        else:
-            musics_directory = '../ApplicationMusics'
+        # if is_in_building_dataset_phase:
+        #     musics_directory = '../BuildingDatasetPhaseMusics'
+        # else:
+        #     musics_directory = '../ApplicationMusics'
 
+        musics_directory = "../musics"
         # --- Get music files and choose music
-        self.music_files = []
+        # self.music_files = []
         self.music_files_length = 0
 
-        self.music_files = os.listdir(musics_directory)
+        # self.music_files = os.listdir(musics_directory)
+        '''
         personalized_directory = ""
         # Read training musics
         if is_in_building_dataset_phase:
@@ -694,8 +722,34 @@ class MusicsWindow(QMainWindow):
             if self.music_files_length == 0:
                 print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
                 exit()
+        '''
 
-        self.music_thread = MusicThread(musics_directory, personalized_directory)
+        # Music files that are accessed by the user
+        conn = sqlite3.connect('../feeltune.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+        user_id = cursor.fetchone()[0]
+        music_id_available = cursor.execute(f"SELECT music_id FROM user_musics WHERE user_id = 0 OR user_id = {user_id} ").fetchall()
+        musics_ids = [row[0] for row in music_id_available]
+        result = cursor.execute(
+            f"SELECT name FROM musics WHERE id IN ({','.join('?' * len(musics_ids))}) ORDER BY id ASC",
+            musics_ids).fetchall()
+        # cursor.execute(f"SELECT name FROM musics WHERE id IN {musics_ids}")
+        self.music_files = [row[0] for row in result]
+
+        conn.close()
+
+        # for file in self.music_files:
+        #     if not file.startswith(current_user_name):
+        #         self.music_files.remove(file)
+
+
+        self.music_files_length = len(self.music_files)
+        if self.music_files_length == 0:
+            print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
+            exit()
+
+        self.music_thread = MusicThread(musics_directory)
         self.music_thread.set_music("NA")
         self.music_thread.finished_music_signal.connect(self.music_finished)
 
@@ -1374,6 +1428,7 @@ class MusicsWindow(QMainWindow):
             nbrs = NearestNeighbors(n_neighbors=2).fit(valence_arousal_pairs)
 
             # Define your new point
+            warnings.filterwarnings('ignore', category=UserWarning)
             new_point = pd.DataFrame([[predicted_valence, predicted_arousal]], columns=['music_valence', 'music_arousal'])
 
             # Find the index of the closest point to the new point
@@ -1391,16 +1446,25 @@ class MusicsWindow(QMainWindow):
             last_application_music_played = music_name
 
             # Plotting the data points
-            plt.scatter(valence_arousal_pairs['music_valence'].values, valence_arousal_pairs['music_arousal'].values,
-                        label='Músicas da Aplicação')
+            # plt.scatter(valence_arousal_pairs['music_valence'].values, valence_arousal_pairs['music_arousal'].values,
+            #             label='Músicas da Aplicação')
+            valence = [pair[0] for pair in valence_arousal_pairs]
+            arousal = [pair[1] for pair in valence_arousal_pairs]
+            plt.scatter(valence, arousal, label='Músicas da Aplicação')
             plt.scatter(predicted_valence, predicted_arousal, c='red', marker='x', label='Nova Música')
+
             if closest_one_chosen:
-                plt.scatter(valence_arousal_pairs.iloc[index[0][0]]['music_valence'],
-                        valence_arousal_pairs.iloc[index[0][0]]['music_arousal'], c='green', marker='o',
-                        label='Música Escolhida')
+                # plt.scatter(valence_arousal_pairs.iloc[index[0][0]]['music_valence'],
+                #         valence_arousal_pairs.iloc[index[0][0]]['music_arousal'], c='green', marker='o',
+                #         label='Música Escolhida')
+                chosen_pair = valence_arousal_pairs[index[0][0]]
+                plt.scatter(chosen_pair[0], chosen_pair[1], c='green', marker='o', label='Música Escolhida')
             else:
-                plt.scatter(valence_arousal_pairs.iloc[index[0][1]]['music_valence'],
-                            valence_arousal_pairs.iloc[index[0][1]]['music_arousal'], c='orange', marker='o',
+                # plt.scatter(valence_arousal_pairs.iloc[index[0][1]]['music_valence'],
+                #             valence_arousal_pairs.iloc[index[0][1]]['music_arousal'], c='orange', marker='o',
+                #             label='Segunda Música Mais Próxima')
+                second_closest_pair = valence_arousal_pairs[index[0][1]]
+                plt.scatter(second_closest_pair[0], second_closest_pair[1], c='orange', marker='o',
                             label='Segunda Música Mais Próxima')
 
             plt.xlabel('Valence')
@@ -1408,9 +1472,15 @@ class MusicsWindow(QMainWindow):
             plt.title('Nearest Neighbors')
 
             # Connect the new point to the closest point
-            plt.plot([predicted_valence, valence_arousal_pairs.iloc[index[0]]['music_valence'].values[0]],
-                     [predicted_arousal, valence_arousal_pairs.iloc[index[0]]['music_arousal'].values[0]],
-                     'r--', label='Connecting Line')
+            # plt.plot([predicted_valence, valence_arousal_pairs.iloc[index[0]]['music_valence'].values[0]],
+            #          [predicted_arousal, valence_arousal_pairs.iloc[index[0]]['music_arousal'].values[0]],
+            #          'r--', label='Connecting Line')
+            if closest_one_chosen:
+                plt.plot([predicted_valence, chosen_pair[0]], [predicted_arousal, chosen_pair[1]], 'r--',
+                         label='Connecting Line')
+            else:
+                plt.plot([predicted_valence, second_closest_pair[0]], [predicted_arousal, second_closest_pair[1]],
+                         'r--', label='Connecting Line')
 
             plt.legend()
             plt.show()
@@ -1426,45 +1496,81 @@ class MusicsWindow(QMainWindow):
         if current_user_bpd_progress == 0:
             return
 
-        first_write = not os.path.isfile('../users.csv')  # checks if file exists
-        user_line_number = -1
+        conn = sqlite3.connect('../feeltune.db')
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT * FROM users WHERE name = '{current_user_name}'")
+        user = cursor.fetchone()
         progress = -1
-        every_music_listened = '' # List of musics that the user listened before the current session
-        lines = []
-        if not first_write:
-            with open('../users.csv', 'r', encoding='utf-8') as file:
-                for i, line in enumerate(file):
-                    if i == 0:
-                        continue # Ignore header line in the file
-                    line = line.replace('\n', '') # Remove the '\n' character
-                    line_content = line.split('~~~')
-                    lines.append(line_content)
-                    user_name = line_content[0]
-                    if user_name == current_user_name.lower():
-                        progress = line_content[1]
-                        every_music_listened = line_content[2]
-                        user_line_number = i
 
-        delimiter = '~~~'
-        for music in musics_listened_by_current_user_in_current_session:
-            if every_music_listened != '':
-                every_music_listened += '___'
-            every_music_listened += music
+        if current_user_bpd_progress >= 100:
+            current_user_bpd_progress = 100
 
-        if progress and int(progress) != current_user_bpd_progress:
-            if user_line_number != -1:
-                # If the user already exists, then update the progress
-                lines[user_line_number-1] = [current_user_name.lower(), str(current_user_bpd_progress), every_music_listened]
-            else:
-                lines.append([current_user_name.lower(), str(current_user_bpd_progress), every_music_listened])
+        # If the user doesn't exist in the database, create a new one
+        if user is None:
+            cursor.execute(f"INSERT INTO users (name, progress) VALUES ('{current_user_name}', '{current_user_bpd_progress}')")
+            user_id = cursor.lastrowid
+        else:
+            user_id = user[0]
+            progress = user[2]
+            cursor.execute(
+                f"UPDATE users SET progress = '{current_user_bpd_progress}' WHERE name = '{current_user_name}'")
+            # cursor.execute(f"SELECT musics.name FROM musics_listened "
+            #                f"JOIN musics  ON musics_listened.music_id = musics.id"
+            #                f"WHERE user_id = {user[0]}")
+            # every_music_listened = cursor.fetchall()
 
-            with open('../users.csv', 'w', newline='', encoding='utf-8') as f:
-                header = ['USERNAME', 'DATASET_PROGRESS', 'MUSICS_LISTENED']
-                h = delimiter.join(header)
-                f.write(h + '\n')
-                for line in lines:
-                    l = delimiter.join(line)
-                    f.write(l + '\n')
+        # first_write = not os.path.isfile('../users.csv')  # checks if file exists
+        # user_line_number = -1
+        # progress = -1
+        # every_music_listened = '' # List of musics that the user listened before the current session
+        # lines = []
+        # if not first_write:
+        #     with open('../users.csv', 'r', encoding='utf-8') as file:
+        #         for i, line in enumerate(file):
+        #             if i == 0:
+        #                 continue # Ignore header line in the file
+        #             line = line.replace('\n', '') # Remove the '\n' character
+        #             line_content = line.split('~~~')
+        #             lines.append(line_content)
+        #             user_name = line_content[0]
+        #             if user_name == current_user_name.lower():
+        #                 progress = line_content[1]
+        #                 every_music_listened = line_content[2]
+        #                 user_line_number = i
+
+        # delimiter = '~~~'
+        # for music in musics_listened_by_current_user_in_current_session:
+        #     if every_music_listened != '':
+        #         every_music_listened += '___'
+        #     every_music_listened += music
+
+        # If the user progressed something during the current session, then update the database:
+        if progress != current_user_bpd_progress:
+            # music_names = ", ".join([f"{name}" for name in musics_listened_by_current_user_in_current_session])
+            # cursor.execute(
+            #     f"SELECT id FROM musics WHERE name IN ({music_names})")
+            music_names = ", ".join(["?" for _ in musics_listened_by_current_user_in_current_session])
+            query = "SELECT id FROM musics WHERE name IN ({})".format(music_names)
+            cursor.execute(query, musics_listened_by_current_user_in_current_session)
+            result = cursor.fetchall()  # Returns a list of tuples (music_name,)
+            musics_listened = [row[0] for row in result] # Convert the list of tuples into a list of strings
+            for music in musics_listened:
+                cursor.execute(f"INSERT INTO musics_listened (user_id, music_id) VALUES ('{user_id}', '{music}')")
+        conn.commit()
+        conn.close()
+            # if user_line_number != -1:
+            #     # If the user already exists, then update the progress
+            #     lines[user_line_number-1] = [current_user_name.lower(), str(current_user_bpd_progress), every_music_listened]
+            # else:
+            #     lines.append([current_user_name.lower(), str(current_user_bpd_progress), every_music_listened])
+            #
+            # with open('../users.csv', 'w', newline='', encoding='utf-8') as f:
+            #     header = ['USERNAME', 'DATASET_PROGRESS', 'MUSICS_LISTENED']
+            #     h = delimiter.join(header)
+            #     f.write(h + '\n')
+            #     for line in lines:
+            #         l = delimiter.join(line)
+            #         f.write(l + '\n')
 
     def stop_threads(self):
         self.music_thread.pause_music()
@@ -1474,7 +1580,7 @@ class MusicsWindow(QMainWindow):
         self.emotion_thread.exit(0)
         self.emotion_thread = None
 
-    def save_user_progress(self):
+    def save_user_progress(self, has_saved_into_csv = False):
         global data
 
         first_write = not os.path.isfile('../dataset_for_model_training.csv')  # checks if dataset file exists
@@ -1495,7 +1601,8 @@ class MusicsWindow(QMainWindow):
                 for record in data:
                     writer.writerow(record.values())
 
-        self.save_bdp_progress_to_csv()
+        if not has_saved_into_csv:
+            self.save_bdp_progress_to_csv()
 
     def quit_button_clicked(self):
         reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
@@ -1569,7 +1676,7 @@ class MusicsWindow(QMainWindow):
                 self.stacked_widget.setCurrentIndex(1)
             else:
                 global current_user_bpd_progress
-                if current_user_bpd_progress != 100:
+                if current_user_bpd_progress < 100:
                     # Play next music button
                     self.stacked_widget.setCurrentIndex(2)
                 else: # Finished BDP Phase
@@ -1715,11 +1822,11 @@ class MusicsWindow(QMainWindow):
         self.emotion_thread.quit()
 
         self.save_bdp_progress_to_csv()
-        self.save_user_progress()
+        self.save_user_progress(True)
 
 
         # Get dataframe
-        with open('../dataset_for_model_training.csv', 'r') as file_obj:
+        with open('../dataset_for_model_training.csv', 'r', encoding='utf-8') as file_obj:
             dataset = pd.read_csv(file_obj)
             df = pd.DataFrame(dataset) # So that we don't change the original df (and filtered_df can't be a view)
             df = df[df['username'] == current_user_name.lower()]
@@ -1739,11 +1846,11 @@ class MusicsWindow(QMainWindow):
 class MusicThread(QThread):
     finished_music_signal = pyqtSignal()
 
-    def __init__(self, directory, personalized_directory, parent=None):
+    def __init__(self, directory, parent=None):
         super().__init__(parent)
 
         self.directory = directory
-        self.personalized_directory = personalized_directory
+        # self.personalized_directory = personalized_directory
         self.music_name = ''
 
         self.defined_volume = -1
@@ -1764,21 +1871,23 @@ class MusicThread(QThread):
     def set_music(self, music_name):
         if music_name == "NA":
             return
-        global_available_musics = os.listdir(self.directory)
-        music_full_path = ""
-        music_found = False
-        if os.path.exists(self.personalized_directory):
-            personalized_available_musics = os.listdir(self.personalized_directory)
-            for music in personalized_available_musics:
-                if music_name == music:
-                    music_full_path = self.personalized_directory + '/' + music
-                    music_found = True
-                    break
-        if not music_found:
-            for music in global_available_musics:
-                if music_name == music:
-                    music_full_path = self.directory + '/' + music
-                    break
+        # global_available_musics = os.listdir(self.directory)
+        # music_full_path = ""
+        # music_found = False
+        # Check if the user has uploaded music
+        # if os.path.exists(self.personalized_directory):
+        #     personalized_available_musics = os.listdir(self.personalized_directory)
+        #     for music in personalized_available_musics:
+        #         if music_name == music:
+        #             music_full_path = self.personalized_directory + '/' + music
+        #             music_found = True
+        #             break
+        # if not music_found:
+        #     for music in global_available_musics:
+        #         if music_name == music:
+        #             music_full_path = self.directory + '/' + music
+        #             break
+        music_full_path = self.directory + '/' + music_name
 
         self.music_name = music_full_path
         return music_full_path
@@ -2142,16 +2251,16 @@ class BuildingPhaseHomeScreen(QMainWindow):
             )
             return None
 
-    def check_if_music_was_already_classified_with_va(self, file_name):
-        #check in csv to see if music is already there
-        with open("../building_dataset_phase_musics_va.csv", "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            lines = list(reader)
-            for index, line in reversed(list(enumerate(lines, start=1))):
-                music = line[0].split("~~~")[0]
-                if music == file_name:
-                    return True
-        return False
+    # def check_if_music_was_already_classified_with_va(self, file_name):
+    #     #check in csv to see if music is already there
+    #     with open("../building_dataset_phase_musics_va.csv", "r", encoding="utf-8") as f:
+    #         reader = csv.reader(f)
+    #         lines = list(reader)
+    #         for index, line in reversed(list(enumerate(lines, start=1))):
+    #             music = line[0].split("~~~")[0]
+    #             if music == file_name:
+    #                 return True
+    #     return False
 
     def add_music_button_clicked(self):
         global current_user_name
@@ -2165,32 +2274,53 @@ class BuildingPhaseHomeScreen(QMainWindow):
 
         # ---------- Uploads music ----------
         try:
-            first_upload = False
-            folder_name = f"../personalized_musics/{current_user_name.lower()}"
+            folder_name = f"../musics"
+            # first_upload = False
+            # folder_name = f"../personalized_musics/{current_user_name.lower()}"
             if not os.path.exists(folder_name):
                 os.makedirs(folder_name)
-            if is_in_building_dataset_phase:
-                folder_name = f"../personalized_musics/{current_user_name.lower()}/building_dataset_phase_musics"
-                if not os.path.exists(folder_name):
-                    os.makedirs(folder_name)
-                    first_upload = True
-            else:
-                folder_name = f"../personalized_musics/{current_user_name.lower()}/application_musics"
-                if not os.path.exists(folder_name):
-                    os.makedirs(folder_name)
-                    first_upload = True
-            if not first_upload:
-                file_name = file.split('/')[-1]
-                musics = os.listdir(folder_name)
-                for music in musics:
-                    if music == file_name:
-                        self.setDisabled(False)
-                        information_box(self, "Success", "Music was previously uploaded!")
-                        return
+            # if is_in_building_dataset_phase:
+            #     folder_name = f"../personalized_musics/{current_user_name.lower()}/building_dataset_phase_musics"
+            #     if not os.path.exists(folder_name):
+            #         os.makedirs(folder_name)
+            #         first_upload = True
+            # else:
+            #     folder_name = f"../personalized_musics/{current_user_name.lower()}/application_musics"
+            #     if not os.path.exists(folder_name):
+            #         os.makedirs(folder_name)
+            #         first_upload = True
+            # if not first_upload:
+            file_name = file.split('/')[-1]
+            musics = os.listdir(folder_name)
+            for music in musics:
+                if music == file_name:
+                    # The uploaded music was already classified for VA
+
+                    conn = sqlite3.connect('../feeltune.db')
+                    cursor = conn.cursor()
+                    # Fetch user_id
+                    cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+                    user_id = cursor.fetchone()[0]
+
+                    # Fetch music_id
+                    cursor.execute("SELECT * FROM musics WHERE name = ?", (file_name,))
+                    music_id = cursor.fetchone()[0]
+
+                    # Check if user has this music
+                    cursor.execute("SELECT * FROM user_musics WHERE user_id = ? AND music_id = ?", (user_id, music_id))
+                    user_has_music = cursor.fetchone()
+                    if user_has_music is None:
+                        cursor.execute("INSERT INTO user_musics (user_id, music_id) VALUES (?, ?)", (user_id, music_id))
+                        conn.commit()
+                    conn.close()
+
+                    self.setDisabled(False)
+                    information_box(self, "Success", "Music was previously uploaded!")
+                    return
             shutil.copy2(file, folder_name)
             file_name = file.split('/')[-1]
-            if not self.check_if_music_was_already_classified_with_va(file_name):
-                predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va')
+            # if not self.check_if_music_was_already_classified_with_va(file_name): # TODO- tirar esta linha pq se ja tiver sido classificado, nunca entra aqui (ja faço esse check no music == file_name)
+            predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va', current_user_name)
             self.setDisabled(False)
             QMessageBox.information(
                 self, "Success", "Music uploaded!",
@@ -2541,23 +2671,48 @@ class ApplicationHomeScreen(QMainWindow):
         self.nextWindow.switch_layout()
 
         # Get every valence and arousal pairs from ApplicationMusics
-        delimiter = '~~~'
-        with open('../applications_musics_va.csv', 'r', encoding="utf-8") as file_obj:
-            try:
-                musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
-            except pd.errors.ParserError:
-                musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
-
-        if musics_df is None:
-            information_box(self, "Error", "Application has no musics.")
-            return
+        # delimiter = '~~~'
+        # with open('../applications_musics_va.csv', 'r', encoding="utf-8") as file_obj:
+        #     try:
+        #         musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
+        #     except pd.errors.ParserError:
+        #         musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
+        #
+        # if musics_df is None:
+        #     information_box(self, "Error", "Application has no musics.")
+        #     return
 
         global valence_arousal_pairs
         global application_music_names
 
-        valence_arousal_pairs = musics_df[['music_valence', 'music_arousal']]
-        application_music_names = musics_df['music_name']
+        # valence_arousal_pairs = musics_df[['music_valence', 'music_arousal']]
+        # application_music_names = musics_df['music_name']
 
+        # Music files that are accessed by the user
+        conn = sqlite3.connect('../feeltune.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+        user_id = cursor.fetchone()[0]
+        music_id_available = cursor.execute(
+            f"SELECT music_id FROM user_musics WHERE user_id = 0 OR user_id = {user_id} ").fetchall()
+        music_ids = [row[0] for row in music_id_available]
+
+        result = cursor.execute(
+            f"SELECT valence FROM musics WHERE id IN ({','.join('?' * len(music_ids))}) ORDER BY id ASC",
+            music_ids).fetchall()
+        valence = [r[0] for r in result]
+
+        # result = cursor.execute("SELECT arousal FROM musics").fetchall()
+        result = cursor.execute(
+            f"SELECT arousal FROM musics WHERE id IN ({','.join('?' * len(music_ids))}) ORDER BY id ASC",
+            music_ids).fetchall()
+        arousal = [r[0] for r in result]
+        valence_arousal_pairs = [(v, a) for v, a in zip(valence, arousal)]
+        result = cursor.execute(
+            f"SELECT name FROM musics WHERE id IN ({','.join('?' * len(music_ids))}) ORDER BY id ASC",
+            music_ids).fetchall()
+        # result = cursor.execute("SELECT name FROM musics").fetchall()
+        application_music_names = [r[0] for r in result]
         music_name = self.nextWindow.choose_next_application_music()
 
         if not music_name:
