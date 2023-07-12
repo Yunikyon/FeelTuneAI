@@ -12,7 +12,7 @@ import tensorflow as tf
 from keras.api import keras
 
 
-def predict_music_directory_emotions(directory, csv_name):
+def predict_music_directory_emotions(directory):
     # Get all files in the directory
     files = os.listdir(directory)
 
@@ -122,18 +122,20 @@ def predict_music_directory_emotions(directory, csv_name):
     predicted_arousal = arousal_model.predict(dataframe_arousal)
     arousal = np.around(np.interp(predicted_arousal, (0, 1), (-1, 1)), decimals=3)
 
-    # Write to csv
-    with open(f'{csv_name}.csv', 'w+', newline='', encoding="utf-8") as csv_file:
-        header_row = ['music_name', 'music_valence', 'music_arousal']
-        delimiter = '~~~'
-        h = delimiter.join(header_row)
-        csv_file.write(h + '\n')
+    # Save in database
+    conn = sqlite3.connect('./feeltune.db')
+    cursor = conn.cursor()
+    i = 0
+    for music in files:
+        cursor.execute("INSERT INTO musics (name, valence, arousal) VALUES (?, ?, ?)",
+                       (music, valence[i][0], arousal[i][0]))
+        music_id = cursor.lastrowid
+        cursor.execute("INSERT INTO user_musics (user_id, music_id) VALUES (?, ?)", (0, music_id))
+        i += 1
 
-        i = 0
-        for music in files:
-            l = delimiter.join([music, str(valence[i][0]), str(arousal[i][0])])
-            csv_file.write(l + '\n')
-            i += 1
+    conn.commit()
+    conn.close()
+
 
 def predict_uploaded_music_emotions(directory, file, csv_name, user_uploaded=None):
     # --- Extract Common features using librosa
@@ -233,16 +235,11 @@ def predict_uploaded_music_emotions(directory, file, csv_name, user_uploaded=Non
     predicted_arousal = arousal_model.predict(dataframe_arousal)
     arousal = np.around(np.interp(predicted_arousal, (0, 1), (-1, 1)), decimals=3)
 
-    # Write to csv
-    # with open(csv_name, 'a', newline='', encoding="utf-8") as csv_file:
-    #     delimiter = '~~~'
-    #     l = delimiter.join([file, str(valence[0][0]), str(arousal[0][0])])
-    #     csv_file.write(l + '\n')
-
+    # conn = sqlite3.connect('./feeltune.db')
     conn = sqlite3.connect('../feeltune.db')
     cursor = conn.cursor()
     cursor.execute("INSERT INTO musics (name, valence, arousal) VALUES (?, ?, ?)",
-                   (file, round(valence[0], 3), round(arousal[0], 3)))
+                   (file, valence[0][0], arousal[0][0]))
     music_id = cursor.lastrowid
     if user_uploaded is None:
         user_id = 0
@@ -254,8 +251,9 @@ def predict_uploaded_music_emotions(directory, file, csv_name, user_uploaded=Non
     conn.commit()
     conn.close()
 
+
 if __name__ == '__main__':
-    predict_music_directory_emotions('./BuildingDatasetPhaseMusics', 'building_dataset_phase_musics_va')
+    predict_music_directory_emotions('./musics')
 
 # predict_uploaded_music_emotions('./BuildingDatasetPhaseMusics', 'Avril Lavigne - Girlfriend (Official Video).mp3', 'building_dataset_phase_musics_va')
 

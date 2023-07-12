@@ -679,62 +679,22 @@ class MusicsWindow(QMainWindow):
         self.music_is_paused = False
 
         # Music Thread Initialization
-        # if is_in_building_dataset_phase:
-        #     musics_directory = '../BuildingDatasetPhaseMusics'
-        # else:
-        #     musics_directory = '../ApplicationMusics'
-
         musics_directory = "../musics"
+
         # --- Get music files and choose music
-        # self.music_files = []
         self.music_files_length = 0
 
-        # self.music_files = os.listdir(musics_directory)
-        '''
-        personalized_directory = ""
-        # Read training musics
-        if is_in_building_dataset_phase:
-            # Add personalized bdp user musics to base musics
-            if os.path.exists(f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'):
-                personalized_directory = f'../personalized_musics/{current_user_name}/building_dataset_phase_musics'
-                personal_music_files = os.listdir(
-                    f'../personalized_musics/{current_user_name}/building_dataset_phase_musics')
-                self.music_files.extend(personal_music_files)
-
-            self.music_files_length = len(self.music_files)
-
-            # Verify if doesn't exit musics
-            global music_files_bdp_length
-            music_files_bdp_length = self.music_files_length
-
-            if self.music_files_length == 0:
-                print(f"{Bcolors.WARNING} BDP music files length is zero" + Bcolors.ENDC)
-                exit()
-        else:  # Read application musics
-            # Add personalized application user musics to base musics
-            if os.path.exists(f'../personalized_musics/{current_user_name}/application_musics'):
-                personalized_directory = f'../personalized_musics/{current_user_name}/application_musics'
-                personal_music_files = os.listdir(f'../personalized_musics/{current_user_name}/application_musics')
-                self.music_files.extend(personal_music_files)
-
-            # Verify if doesn't exit musics
-            self.music_files_length = len(self.music_files)
-            if self.music_files_length == 0:
-                print(f"{Bcolors.WARNING} Application music files length is zero" + Bcolors.ENDC)
-                exit()
-        '''
-
-        # Music files that are accessed by the user
+        # Get music files that are accessed by the user
         conn = sqlite3.connect('../feeltune.db')
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
         user_id = cursor.fetchone()[0]
-        music_id_available = cursor.execute(f"SELECT music_id FROM user_musics WHERE user_id = 0 OR user_id = {user_id} ").fetchall()
+        music_id_available = cursor.execute(f"SELECT DISTINCT music_id FROM user_musics WHERE user_id = 0 OR user_id = {user_id} ").fetchall()
         musics_ids = [row[0] for row in music_id_available]
         result = cursor.execute(
             f"SELECT name FROM musics WHERE id IN ({','.join('?' * len(musics_ids))}) ORDER BY id ASC",
             musics_ids).fetchall()
-        # cursor.execute(f"SELECT name FROM musics WHERE id IN {musics_ids}")
+
         self.music_files = [row[0] for row in result]
 
         conn.close()
@@ -742,7 +702,6 @@ class MusicsWindow(QMainWindow):
         # for file in self.music_files:
         #     if not file.startswith(current_user_name):
         #         self.music_files.remove(file)
-
 
         self.music_files_length = len(self.music_files)
         if self.music_files_length == 0:
@@ -2307,7 +2266,8 @@ class BuildingPhaseHomeScreen(QMainWindow):
                     music_id = cursor.fetchone()[0]
 
                     # Check if user has this music
-                    cursor.execute("SELECT * FROM user_musics WHERE user_id = ? AND music_id = ?", (user_id, music_id))
+                    cursor.execute("SELECT * FROM user_musics WHERE (user_id = ? AND music_id = ?) "
+                                   "OR (user_id = 0 AND music_id = ?)", (user_id, music_id, music_id))
                     user_has_music = cursor.fetchone()
                     if user_has_music is None:
                         cursor.execute("INSERT INTO user_musics (user_id, music_id) VALUES (?, ?)", (user_id, music_id))
@@ -2319,7 +2279,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
                     return
             shutil.copy2(file, folder_name)
             file_name = file.split('/')[-1]
-            # if not self.check_if_music_was_already_classified_with_va(file_name): # TODO- tirar esta linha pq se ja tiver sido classificado, nunca entra aqui (ja faço esse check no music == file_name)
+
             predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va.csv', current_user_name)
             self.setDisabled(False)
             QMessageBox.information(
