@@ -218,7 +218,7 @@ def get_context():
 
 def merge_musics_va_to_dataset(dataset):
     # delimiter = '~~~'
-    # with open('../building_dataset_phase_musics_va_2.csv', 'r', encoding='utf-8') as file_obj:
+    # with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
     #     try:
     #         musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
     #     except pd.errors.ParserError:
@@ -2320,7 +2320,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
             shutil.copy2(file, folder_name)
             file_name = file.split('/')[-1]
             # if not self.check_if_music_was_already_classified_with_va(file_name): # TODO- tirar esta linha pq se ja tiver sido classificado, nunca entra aqui (ja faço esse check no music == file_name)
-            predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va', current_user_name)
+            predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va.csv', current_user_name)
             self.setDisabled(False)
             QMessageBox.information(
                 self, "Success", "Music uploaded!",
