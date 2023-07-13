@@ -217,14 +217,6 @@ def get_context():
 
 
 def merge_musics_va_to_dataset(dataset):
-    # delimiter = '~~~'
-    # with open('../building_dataset_phase_musics_va.csv', 'r') as file_obj:
-    #     try:
-    #         musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
-    #     except pd.errors.ParserError:
-    #         musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
-    # dataset = pd.merge(dataset, musics_df, on='music_name', how='left')
-
     conn = sqlite3.connect('../feeltune.db')
     musics_df = pd.read_sql_query("SELECT name, valence AS music_valence, arousal AS music_arousal FROM musics", conn)
     dataset = pd.merge(dataset, musics_df, left_on='music_name', right_on='name', how='left')
@@ -288,6 +280,7 @@ def one_hot_encoding(filtered_df, filtered_df_column_name, predefined_columns):
         one_hot_encoded[col] = 0
 
     return one_hot_encoded
+
 
 def normalize_dataset(self, filtered_df):
     global is_training_model
@@ -602,15 +595,11 @@ class LoginWindow(QMainWindow):
         global is_in_building_dataset_phase
         global current_user_bpd_progress
 
-        # progress = 0
-        # aux_musics_listened_previously = ''
-        # file_exists = os.path.isfile('../users.csv')
-
         conn = sqlite3.connect('../feeltune.db')
         cursor = conn.cursor()
 
         # Read user information, if it exists
-        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
         user = cursor.fetchone()
         if user is not None:
             progress = user[2]
@@ -620,29 +609,13 @@ class LoginWindow(QMainWindow):
             result = cursor.fetchall() # Returns a list of tuples (music_name,)
             musics_listened_by_current_user = [row[0] for row in result]
         else:
-            cursor.execute("INSERT INTO users (name, progress) VALUES (?, 0)", (current_user_name,))
+            cursor.execute("INSERT INTO users (name, progress) VALUES (?, 0)", (current_user_name.lower(),))
             conn.commit()
             progress = 0
             musics_listened_by_current_user = []
 
-        # Read user's saved information
-        # if file_exists:
-        #     with open('../users.csv', 'r', encoding='utf-8') as file:
-        #         for i, line in enumerate(file):
-        #             if i == 0:
-        #                 continue
-        #             line_content = line.split('~~~')
-        #             user_name = line_content[0]
-        #             if user_name == current_user_name.lower():
-        #                 progress = int(line_content[1])
-        #                 aux_musics_listened_previously = line_content[2]
-        #                 break
-
         if progress == 100 and os.path.isfile(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5'):
             is_in_building_dataset_phase = False
-
-        # if aux_musics_listened_previously != '':
-        #     musics_listened_by_current_user = aux_musics_listened_previously.replace('\n', '').split('___')
 
         current_user_bpd_progress = progress
 
@@ -687,7 +660,7 @@ class MusicsWindow(QMainWindow):
         # Get music files that are accessed by the user
         conn = sqlite3.connect('../feeltune.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
         user_id = cursor.fetchone()[0]
         music_id_available = cursor.execute(f"SELECT DISTINCT music_id FROM user_musics WHERE user_id = 0 OR user_id = {user_id} ").fetchall()
         musics_ids = [row[0] for row in music_id_available]
@@ -698,10 +671,6 @@ class MusicsWindow(QMainWindow):
         self.music_files = [row[0] for row in result]
 
         conn.close()
-
-        # for file in self.music_files:
-        #     if not file.startswith(current_user_name):
-        #         self.music_files.remove(file)
 
         self.music_files_length = len(self.music_files)
         if self.music_files_length == 0:
@@ -1446,7 +1415,7 @@ class MusicsWindow(QMainWindow):
 
             return music_name
 
-    def save_bdp_progress_to_csv(self):
+    def save_bdp_progress_to_database(self):
         global current_user_name
         global current_user_bpd_progress
         global musics_listened_by_current_user_in_current_session
@@ -1457,7 +1426,7 @@ class MusicsWindow(QMainWindow):
 
         conn = sqlite3.connect('../feeltune.db')
         cursor = conn.cursor()
-        cursor.execute(f"SELECT * FROM users WHERE name = '{current_user_name}'")
+        cursor.execute(f"SELECT * FROM users WHERE name = '{current_user_name.lower()}'")
         user = cursor.fetchone()
         progress = -1
 
@@ -1466,48 +1435,16 @@ class MusicsWindow(QMainWindow):
 
         # If the user doesn't exist in the database, create a new one
         if user is None:
-            cursor.execute(f"INSERT INTO users (name, progress) VALUES ('{current_user_name}', '{current_user_bpd_progress}')")
+            cursor.execute(f"INSERT INTO users (name, progress) VALUES ('{current_user_name.lower()}', '{current_user_bpd_progress}')")
             user_id = cursor.lastrowid
         else:
             user_id = user[0]
             progress = user[2]
             cursor.execute(
-                f"UPDATE users SET progress = '{current_user_bpd_progress}' WHERE name = '{current_user_name}'")
-            # cursor.execute(f"SELECT musics.name FROM musics_listened "
-            #                f"JOIN musics  ON musics_listened.music_id = musics.id"
-            #                f"WHERE user_id = {user[0]}")
-            # every_music_listened = cursor.fetchall()
-
-        # first_write = not os.path.isfile('../users.csv')  # checks if file exists
-        # user_line_number = -1
-        # progress = -1
-        # every_music_listened = '' # List of musics that the user listened before the current session
-        # lines = []
-        # if not first_write:
-        #     with open('../users.csv', 'r', encoding='utf-8') as file:
-        #         for i, line in enumerate(file):
-        #             if i == 0:
-        #                 continue # Ignore header line in the file
-        #             line = line.replace('\n', '') # Remove the '\n' character
-        #             line_content = line.split('~~~')
-        #             lines.append(line_content)
-        #             user_name = line_content[0]
-        #             if user_name == current_user_name.lower():
-        #                 progress = line_content[1]
-        #                 every_music_listened = line_content[2]
-        #                 user_line_number = i
-
-        # delimiter = '~~~'
-        # for music in musics_listened_by_current_user_in_current_session:
-        #     if every_music_listened != '':
-        #         every_music_listened += '___'
-        #     every_music_listened += music
+                f"UPDATE users SET progress = '{current_user_bpd_progress}' WHERE name = '{current_user_name.lower()}'")
 
         # If the user progressed something during the current session, then update the database:
         if progress != current_user_bpd_progress:
-            # music_names = ", ".join([f"{name}" for name in musics_listened_by_current_user_in_current_session])
-            # cursor.execute(
-            #     f"SELECT id FROM musics WHERE name IN ({music_names})")
             music_names = ", ".join(["?" for _ in musics_listened_by_current_user_in_current_session])
             query = "SELECT id FROM musics WHERE name IN ({})".format(music_names)
             cursor.execute(query, musics_listened_by_current_user_in_current_session)
@@ -1517,19 +1454,6 @@ class MusicsWindow(QMainWindow):
                 cursor.execute(f"INSERT INTO musics_listened (user_id, music_id) VALUES ('{user_id}', '{music}')")
         conn.commit()
         conn.close()
-            # if user_line_number != -1:
-            #     # If the user already exists, then update the progress
-            #     lines[user_line_number-1] = [current_user_name.lower(), str(current_user_bpd_progress), every_music_listened]
-            # else:
-            #     lines.append([current_user_name.lower(), str(current_user_bpd_progress), every_music_listened])
-            #
-            # with open('../users.csv', 'w', newline='', encoding='utf-8') as f:
-            #     header = ['USERNAME', 'DATASET_PROGRESS', 'MUSICS_LISTENED']
-            #     h = delimiter.join(header)
-            #     f.write(h + '\n')
-            #     for line in lines:
-            #         l = delimiter.join(line)
-            #         f.write(l + '\n')
 
     def stop_threads(self):
         self.music_thread.pause_music()
@@ -1561,7 +1485,7 @@ class MusicsWindow(QMainWindow):
                     writer.writerow(record.values())
 
         if not has_saved_into_csv:
-            self.save_bdp_progress_to_csv()
+            self.save_bdp_progress_to_database()
 
     def quit_button_clicked(self):
         reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
@@ -1685,32 +1609,9 @@ class MusicsWindow(QMainWindow):
 
         self.setDisabled(False)
 
-    # def angry_button_clicked(self):
-    #     self.emotion_rated("angry")
-    #
-    # def disgust_button_clicked(self):
-    #     self.emotion_rated("disgust")
-    #
-    # def fear_button_clicked(self):
-    #     self.emotion_rated("fear")
-    #
-    # def sad_button_clicked(self):
-    #     self.emotion_rated("sad")
-    #
-    # def neutral_button_clicked(self):
-    #     self.emotion_rated("neutral")
-    #
-    # def surprise_button_clicked(self):
-    #     self.emotion_rated("surprise")
-    #
-    # def happy_button_clicked(self):
-    #     self.emotion_rated("happy")
 
     def play_next_music_clicked(self):
-        # self.music_thread.set_new_music('Agitated Celtic music 30 seconds.mp3')
         global new_record
-        # global is_in_building_dataset_phase
-        # if is_in_building_dataset_phase:
         music_name = self.pick_next_music_to_play_in_BDP()
 
         new_record['music_name'] = music_name
@@ -1777,10 +1678,9 @@ class MusicsWindow(QMainWindow):
         global is_training_model
         is_training_model = True
 
-        # self.emotion_thread.stop_emotions()
         self.emotion_thread.quit()
 
-        self.save_bdp_progress_to_csv()
+        self.save_bdp_progress_to_database()
         self.save_user_progress(True)
 
 
@@ -1830,25 +1730,10 @@ class MusicThread(QThread):
     def set_music(self, music_name):
         if music_name == "NA":
             return
-        # global_available_musics = os.listdir(self.directory)
-        # music_full_path = ""
-        # music_found = False
-        # Check if the user has uploaded music
-        # if os.path.exists(self.personalized_directory):
-        #     personalized_available_musics = os.listdir(self.personalized_directory)
-        #     for music in personalized_available_musics:
-        #         if music_name == music:
-        #             music_full_path = self.personalized_directory + '/' + music
-        #             music_found = True
-        #             break
-        # if not music_found:
-        #     for music in global_available_musics:
-        #         if music_name == music:
-        #             music_full_path = self.directory + '/' + music
-        #             break
-        music_full_path = self.directory + '/' + music_name
 
+        music_full_path = self.directory + '/' + music_name
         self.music_name = music_full_path
+
         return music_full_path
 
     def set_directory(self, directory):
@@ -2210,17 +2095,6 @@ class BuildingPhaseHomeScreen(QMainWindow):
             )
             return None
 
-    # def check_if_music_was_already_classified_with_va(self, file_name):
-    #     #check in csv to see if music is already there
-    #     with open("../building_dataset_phase_musics_va.csv", "r", encoding="utf-8") as f:
-    #         reader = csv.reader(f)
-    #         lines = list(reader)
-    #         for index, line in reversed(list(enumerate(lines, start=1))):
-    #             music = line[0].split("~~~")[0]
-    #             if music == file_name:
-    #                 return True
-    #     return False
-
     def add_music_button_clicked(self):
         global current_user_name
         global is_in_building_dataset_phase
@@ -2234,21 +2108,9 @@ class BuildingPhaseHomeScreen(QMainWindow):
         # ---------- Uploads music ----------
         try:
             folder_name = f"../musics"
-            # first_upload = False
-            # folder_name = f"../personalized_musics/{current_user_name.lower()}"
             if not os.path.exists(folder_name):
                 os.makedirs(folder_name)
-            # if is_in_building_dataset_phase:
-            #     folder_name = f"../personalized_musics/{current_user_name.lower()}/building_dataset_phase_musics"
-            #     if not os.path.exists(folder_name):
-            #         os.makedirs(folder_name)
-            #         first_upload = True
-            # else:
-            #     folder_name = f"../personalized_musics/{current_user_name.lower()}/application_musics"
-            #     if not os.path.exists(folder_name):
-            #         os.makedirs(folder_name)
-            #         first_upload = True
-            # if not first_upload:
+
             file_name = file.split('/')[-1]
             musics = os.listdir(folder_name)
             for music in musics:
@@ -2258,7 +2120,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
                     conn = sqlite3.connect('../feeltune.db')
                     cursor = conn.cursor()
                     # Fetch user_id
-                    cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+                    cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
                     user_id = cursor.fetchone()[0]
 
                     # Fetch music_id
@@ -2280,7 +2142,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
             shutil.copy2(file, folder_name)
             file_name = file.split('/')[-1]
 
-            predict_uploaded_music_emotions(folder_name, file_name, '../building_dataset_phase_musics_va.csv', current_user_name)
+            predict_uploaded_music_emotions(folder_name, file_name, current_user_name.lower())
             self.setDisabled(False)
             QMessageBox.information(
                 self, "Success", "Music uploaded!",
@@ -2631,27 +2493,13 @@ class ApplicationHomeScreen(QMainWindow):
         self.nextWindow.switch_layout()
 
         # Get every valence and arousal pairs from ApplicationMusics
-        # delimiter = '~~~'
-        # with open('../applications_musics_va.csv', 'r', encoding="utf-8") as file_obj:
-        #     try:
-        #         musics_df = pd.read_csv(file_obj, sep=delimiter, engine='python')
-        #     except pd.errors.ParserError:
-        #         musics_df = pd.read_csv(file_obj.replace(delimiter, ','), sep=',')
-        #
-        # if musics_df is None:
-        #     information_box(self, "Error", "Application has no musics.")
-        #     return
-
         global valence_arousal_pairs
         global application_music_names
-
-        # valence_arousal_pairs = musics_df[['music_valence', 'music_arousal']]
-        # application_music_names = musics_df['music_name']
 
         # Music files that are accessed by the user
         conn = sqlite3.connect('../feeltune.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name,))
+        cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
         user_id = cursor.fetchone()[0]
         music_id_available = cursor.execute(
             f"SELECT music_id FROM user_musics WHERE user_id = 0 OR user_id = {user_id} ").fetchall()
@@ -2969,7 +2817,7 @@ class TrainThread(QThread):
             # Return the test metric as the objective value to be optimized (minimized)
             return metric
 
-        with open(f'../{current_user_name}_normalized_dataset.csv', 'r') as file:
+        with open(f'../{current_user_name.lower()}_normalized_dataset.csv', 'r') as file:
             # 1. Get normalized dataset of username
             dataset = pd.read_csv(file)
 

@@ -137,7 +137,7 @@ def predict_music_directory_emotions(directory):
     conn.close()
 
 
-def predict_uploaded_music_emotions(directory, file, csv_name, user_uploaded=None):
+def predict_uploaded_music_emotions(directory, file, user_uploaded=None):
     # --- Extract Common features using librosa
     # Mel-frequency cepstral coefficients (MFCCs)
     mfcc = np.array([librosa.feature.mfcc(y=librosa.load(directory + '/' + file, duration=150)[0],
@@ -235,9 +235,9 @@ def predict_uploaded_music_emotions(directory, file, csv_name, user_uploaded=Non
     predicted_arousal = arousal_model.predict(dataframe_arousal)
     arousal = np.around(np.interp(predicted_arousal, (0, 1), (-1, 1)), decimals=3)
 
-    # conn = sqlite3.connect('./feeltune.db')
     conn = sqlite3.connect('../feeltune.db')
     cursor = conn.cursor()
+
     cursor.execute("INSERT INTO musics (name, valence, arousal) VALUES (?, ?, ?)",
                    (file, valence[0][0], arousal[0][0]))
     music_id = cursor.lastrowid
