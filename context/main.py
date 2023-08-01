@@ -106,9 +106,12 @@ def execute():
 
     for index, row in df3.iterrows():
         # --- classPrecInt attribute transformation ---
-        if 'classPrecInt' in df3.columns:
+        # if 'classPrecInt' in df3.columns:
+        try:
             precipitation_id = df3.at[index, 'classPrecInt']
-            df3.at[index, 'classPrecInt'] = transform.get_precipitation_type(info_precipitation_type, precipitation_id)
+        except KeyError:
+            precipitation_id = None
+        df3.at[index, 'classPrecInt'] = transform.get_precipitation_type(info_precipitation_type, precipitation_id)
 
         # --- classWindSpeed attribute transformation ---
         if 'classWindSpeed' in df3.columns:

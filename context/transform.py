@@ -17,7 +17,7 @@ def get_weather_type(data, id):
 def get_precipitation_type(data, id):
     if data is None:
         return "N/A"
-    if np.isnan(id):
+    if id is None or np.isnan(id):
         return "No precipitation"
     for item in data['data']:
         if int(item['classPrecInt']) == id:
