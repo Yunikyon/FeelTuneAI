@@ -1575,12 +1575,16 @@ class MusicsWindow(QMainWindow):
 
         self.setDisabled(True)
         self.is_rating_music = False
+
         musics_listened_by_current_user.append(new_record['music_name'])
         musics_listened_by_current_user_in_current_session.append(new_record['music_name'])
+
         current_user_bpd_progress = round((len(musics_listened_by_current_user) * 100) / self.music_files_length)  # Regra 3 simples para ver progresso atual
+
         self.progress_slider_animation.setValue(current_user_bpd_progress)
         self.progress_slider_play_next.setValue(current_user_bpd_progress)
         self.switch_layout()
+
         current_time = datetime.now().strftime("%H:%M:%S")  # gets current time
 
         new_dict = {'username': current_user_name.lower(), 'listenedAt': current_time, 'initial_emotion': new_record['initial_emotion'],
@@ -1594,6 +1598,7 @@ class MusicsWindow(QMainWindow):
         update_time = datetime.now()
         global last_time_context_data_was_called
         global last_context_data
+
         # Update context if there is no context or if 20 minutes have elapsed since last time
         if last_time_context_data_was_called == "" or ((update_time - last_time_context_data_was_called).total_seconds() > 1200):
             context_dictionary, number_of_headers = get_context()
@@ -1606,6 +1611,9 @@ class MusicsWindow(QMainWindow):
         new_dict.update(context_dictionary)
         data.append(new_dict)
         new_record = reset_values(new_record)
+
+        global current_music_emotions
+        current_music_emotions = ''
 
         self.setDisabled(False)
 
@@ -1649,10 +1657,29 @@ class MusicsWindow(QMainWindow):
             global is_in_building_dataset_phase
             if is_in_building_dataset_phase:
                 self.music_playing = False
+
                 if self.emotion_thread != None:
                     self.emotion_thread.stop_emotions()
-                self.is_rating_music = True
-                self.switch_layout()
+
+                global current_music_emotions
+
+                if len(current_music_emotions) == 0:
+                    # plays next song
+                    information_box(self, "Error", "We were unable to capture \nany of your emotions, we will not\n "
+                                                   "add this music to the progress.")
+
+                    global new_record
+
+                    music_name = self.pick_next_music_to_play_in_BDP()
+                    new_record['music_name'] = music_name
+
+                    self.music_thread.start()
+                    self.music_playing = True
+                    self.switch_layout()
+                else:
+                    self.is_rating_music = True
+                    self.switch_layout()
+
             else:
                 self.emotion_thread.stop_emotions()
 
@@ -2367,7 +2394,8 @@ class ApplicationHomeScreen(QMainWindow):
 
         self.setWindowTitle("FeelTuneAI")
         self.setMouseTracking(True)
-        self.setMinimumSize(QSize(1200, 750))
+        self.setMinimumSize(QSize(1200, 850))
+        self.nextWindow = None
 
         global current_user_name
 
@@ -2476,6 +2504,52 @@ class ApplicationHomeScreen(QMainWindow):
 
         # Blank space three
         blank_space_three = QLabel()
+        blank_space_three.setMaximumSize(10, 30)
+        base_layout.addWidget(blank_space_three)
+
+        # Buttons
+        buttons_left_layout = QHBoxLayout()
+        buttons_left_layout.setContentsMargins(50, 0, 50, 50)
+        buttons_left_layout.setSpacing(15)
+        buttons_left_layout.setAlignment(Qt.AlignLeft)
+
+        # Button Quit
+        quit_button = QPushButton("Quit")
+        quit_button_font = quit_button.font()
+        quit_button_font.setPointSize(10)
+        quit_button.setFont(quit_button_font)
+        quit_button.setMaximumSize(120, 60)
+        quit_button.setMinimumSize(120, 60)
+        quit_button.setIcon(QIcon("./images/quit_btn.png"))
+        quit_button.setIconSize(QSize(35, 35))
+        quit_button.setCursor(QCursor(Qt.PointingHandCursor))
+        quit_button.setStyleSheet(
+            "* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
+        quit_button.clicked.connect(self.quit_button_clicked)
+        buttons_left_layout.addWidget(quit_button)
+
+        # Button Sign Out
+        sign_out_button = QPushButton(" Sign Out")
+        sign_out_button_font = sign_out_button.font()
+        sign_out_button_font.setPointSize(10)
+        sign_out_button.setFont(sign_out_button_font)
+        sign_out_button.setMaximumSize(120, 60)
+        sign_out_button.setMinimumSize(120, 60)
+        sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
+        sign_out_button.setIconSize(QSize(25, 25))
+        sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
+        sign_out_button.setStyleSheet(
+            "* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
+        sign_out_button.clicked.connect(self.sign_out_button_clicked)
+        buttons_left_layout.addWidget(sign_out_button)
+
+        buttons_left_widget = QWidget()
+        buttons_left_widget.setLayout(buttons_left_layout)
+        buttons_left_widget.setMaximumSize(4000, 60)
+        base_layout.addWidget(buttons_left_widget)
+
+        # Blank space three
+        blank_space_three = QLabel()
         blank_space_three.setMaximumSize(10, 800)
         base_layout.addWidget(blank_space_three)
 
@@ -2538,7 +2612,33 @@ class ApplicationHomeScreen(QMainWindow):
         self.nextWindow.show()
         self.close()
 
+    def quit_button_clicked(self):
+        reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
 
+        if reply == QMessageBox.Yes:
+            quit(0)
+
+    def sign_out_button_clicked(self):
+        reply = confirm_warning(self, "Confirm Sign Out", "You're about to sign out.\n Are you sure?")
+
+        if reply == QMessageBox.Yes:
+            global current_user_name
+            current_user_name = ''
+            global current_user_bpd_progress
+            current_user_bpd_progress = 0
+
+            # Switches to Login Window
+            self.nextWindow = LoginWindow()
+            self.nextWindow.show()
+            self.close()
+
+    def closeEvent(self, event):
+        if not self.nextWindow or (not ("MusicsWindow" in str(self.nextWindow)) and not ("LoginWindow" in str(self.nextWindow))):
+            reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
+            if reply == QMessageBox.Yes:
+                quit(0)
+            else:
+                event.ignore()
 
 class TrainingModelScreen(QMainWindow):
     def __init__(self):
