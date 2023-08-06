@@ -2765,11 +2765,12 @@ class ApplicationHomeScreen(QMainWindow):
 
             # Update user's progress variable
             number_of_musics_listened = len(musics_listened_by_current_user)
-            current_user_bpd_progress = (number_of_musics_listened * 100) / (number_of_musics_listened + len(files))
+            current_user_bpd_progress = round((number_of_musics_listened * 100) / (number_of_musics_listened + len(files)))
             is_in_building_dataset_phase = True
 
             # Update user's progress in the database
             cursor.execute(f"UPDATE users SET progress = '{current_user_bpd_progress}' WHERE name = '{current_user_name.lower()}'")
+            conn.commit()
 
             # Delete user's personalized model and the model's statistics
             os.remove(f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5")
@@ -2816,7 +2817,8 @@ class ApplicationHomeScreen(QMainWindow):
 
 
     def closeEvent(self, event):
-        if not self.nextWindow or (not ("MusicsWindow" in str(self.nextWindow)) and not ("LoginWindow" in str(self.nextWindow))):
+        if not self.nextWindow or (not ("MusicsWindow" in str(self.nextWindow)) and not ("LoginWindow" in str(self.nextWindow)
+                                                                                         and not ("BuildingPhaseHomeScreen" in str(self.nextWindow)))):
             reply = confirm_warning(self, "Confirm Exit", "You're about to leave the application.\n Are you sure?")
             if reply == QMessageBox.Yes:
                 quit(0)
