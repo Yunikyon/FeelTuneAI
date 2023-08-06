@@ -27,7 +27,8 @@ from EmotionRecognition.EmotionDetection import capture_emotion
 
 import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect, QThread, pyqtSignal
-from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent, QMovie
+from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent, QMovie, \
+    QTransform
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
     QHBoxLayout, QSlider, QMessageBox, QStackedWidget, QFileDialog
 from numpy.core.defchararray import strip
@@ -149,8 +150,9 @@ class CircleProgressWidget(QWidget):
 
 
 def confirm_warning(self, title, message):
+    message_centered = '<div style=" text-align: center; "><span style="white-space: pre-line;">'+message+'</span></div>'
     reply = QMessageBox.warning(
-        self, title, message,
+        self, title, message_centered,
         QMessageBox.Yes | QMessageBox.No,
     )
     return reply
@@ -606,7 +608,7 @@ class LoginWindow(QMainWindow):
             cursor.execute(f"SELECT musics.name FROM musics_listened "
                            f"JOIN musics  ON musics_listened.music_id = musics.id "
                            f"WHERE user_id = {user[0]}")
-            result = cursor.fetchall() # Returns a list of tuples (music_name,)
+            result = cursor.fetchall()  # Returns a list of tuples (music_name,)
             musics_listened_by_current_user = [row[0] for row in result]
         else:
             cursor.execute("INSERT INTO users (name, progress) VALUES (?, 0)", (current_user_name.lower(),))
@@ -1820,7 +1822,7 @@ class EmotionsThread(QThread):
         if len(current_music_emotions) == 0:
             return
 
-        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]  # TODO - dá erro quando nunca se apanha uma emoção
+        last_emotion = current_music_emotions.split(';')[-2].split('|')[-1]
         new_record['last_emotion'] = last_emotion
         new_record['instant_seconds|percentages|dominant_emotion'] = current_music_emotions
 
@@ -2507,6 +2509,10 @@ class ApplicationHomeScreen(QMainWindow):
         blank_space_three.setMaximumSize(10, 30)
         base_layout.addWidget(blank_space_three)
 
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(50, 0, 50, 50)
+        buttons.setSpacing(15)
+
         # Buttons
         buttons_left_layout = QHBoxLayout()
         buttons_left_layout.setContentsMargins(50, 0, 50, 50)
@@ -2545,8 +2551,38 @@ class ApplicationHomeScreen(QMainWindow):
 
         buttons_left_widget = QWidget()
         buttons_left_widget.setLayout(buttons_left_layout)
-        buttons_left_widget.setMaximumSize(4000, 60)
-        base_layout.addWidget(buttons_left_widget)
+        buttons_left_widget.setMaximumSize(1000, 60)
+        buttons.addWidget(buttons_left_widget)
+
+        buttons_right_layout = QHBoxLayout()
+        buttons_right_layout.setContentsMargins(0, 0, 50, 0)
+        buttons_right_layout.setSpacing(15)
+        buttons_right_layout.setAlignment(Qt.AlignRight)
+
+        # Button Return to BDP
+        return_to_bdp_button = QPushButton(" Return to BDP")
+        return_to_bdp_font = return_to_bdp_button.font()
+        return_to_bdp_font.setPointSize(10)
+        return_to_bdp_button.setFont(return_to_bdp_font)
+        return_to_bdp_button.setMaximumSize(170, 60)
+        return_to_bdp_button.setMinimumSize(170, 60)
+        return_to_bdp_button.setIcon(QIcon("./images/return_to_bdp.png"))
+        return_to_bdp_button.setIconSize(QSize(25, 25))
+        return_to_bdp_button.setCursor(QCursor(Qt.PointingHandCursor))
+        return_to_bdp_button.setStyleSheet(
+            "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+        return_to_bdp_button.clicked.connect(self.return_to_bdp_button_clicked)
+        buttons_right_layout.addWidget(return_to_bdp_button)
+
+        buttons_right_widget = QWidget()
+        buttons_right_widget.setLayout(buttons_right_layout)
+        buttons_right_widget.setMaximumSize(3000, 60)
+        buttons.addWidget(buttons_right_widget)
+
+        buttons_widget = QWidget()
+        buttons_widget.setLayout(buttons)
+        buttons_widget.setMaximumSize(4000, 400)
+        base_layout.addWidget(buttons_widget)
 
         # Blank space three
         blank_space_three = QLabel()
@@ -2631,6 +2667,136 @@ class ApplicationHomeScreen(QMainWindow):
             self.nextWindow = LoginWindow()
             self.nextWindow.show()
             self.close()
+
+    def return_to_bdp_button_clicked(self):
+        reply = confirm_warning(self, "Confirm Return to BDP", "You're about to go back to the BDP.\n"
+                                                               "You will need to upload at least 5 musics \n"
+                                                               "Are you sure?")
+
+        if reply == QMessageBox.Yes:
+            # Ask for upload
+            files = self.select_mp3_files()
+
+            if files is None:
+                return
+
+            self.setDisabled(True)
+            folder_name = f"../musics"
+            if not os.path.exists(folder_name):
+                os.makedirs(folder_name)
+
+            conn = sqlite3.connect('../feeltune.db')
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
+            user = cursor.fetchone()
+
+            # Add musics
+            for file in files:
+                # ---------- Uploads music ----------
+                try:
+                    file_name = file.split('/')[-1]
+                    musics = os.listdir(folder_name)
+
+                    for music in musics:
+                        if music == file_name:
+                            # The uploaded music was already classified for VA
+
+                            # Fetch user_id
+                            user_id = user[0]
+
+                            # Fetch music_id
+                            cursor.execute("SELECT * FROM musics WHERE name = ?", (file_name,))
+                            music_id = cursor.fetchone()[0]
+
+                            # Check if user has this music
+                            cursor.execute("SELECT * FROM user_musics WHERE (user_id = ? AND music_id = ?) "
+                                           "OR (user_id = 0 AND music_id = ?)", (user_id, music_id, music_id))
+                            user_has_music = cursor.fetchone()
+
+                            if user_has_music is None:
+                                cursor.execute("INSERT INTO user_musics (user_id, music_id) VALUES (?, ?)",
+                                               (user_id, music_id))
+                                conn.commit()
+                            conn.close()
+
+                            self.setDisabled(False)
+                            information_box(self, "Success", "Music was previously uploaded!")
+                            return
+                    shutil.copy2(file, folder_name)
+                    file_name = file.split('/')[-1]
+
+                    predict_uploaded_music_emotions(folder_name, file_name, current_user_name.lower())
+                    self.setDisabled(False)
+                    # QMessageBox.information(
+                    #     self, "Success", "Music uploaded!",
+                    #     QMessageBox.Ok,
+                    # )
+                    # randomizeMusicOrder()
+                except Exception as e:
+                    self.setDisabled(False)
+                    QMessageBox.warning(
+                        self, "Error", "Error uploading music file - " + str(e),
+                        QMessageBox.Ok,
+                    )
+
+            global musics_listened_by_current_user
+            global current_user_bpd_progress
+            global is_in_building_dataset_phase
+            global current_user_name
+
+            # Update user's progress variable
+            number_of_musics_listened = len(musics_listened_by_current_user)
+            current_user_bpd_progress = (number_of_musics_listened * 100) / (number_of_musics_listened + len(files))
+            is_in_building_dataset_phase = True
+
+            # Update user's progress in the database
+            cursor.execute(f"UPDATE users SET progress = '{current_user_bpd_progress}' WHERE name = '{current_user_name.lower()}'")
+
+            # Delete user's personalized model and the model's statistics
+            os.remove(f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5")
+            os.remove(f"../Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
+            os.remove(f"../Optuna_History_images/{current_user_name.lower()}_optuna_slice_plot.png")
+
+            # Delete the user's normalized csv
+            os.remove(f"../{current_user_name.lower()}_normalized_dataset.csv")
+
+            information_box(self, "Success", "Musics uploaded!\nReturning you to BDP.")
+
+            # Switches to BDP home Window
+            self.nextWindow = BuildingPhaseHomeScreen()
+            self.nextWindow.show()
+            self.close()
+
+    def select_mp3_files(self):
+        file_dialog = QFileDialog()
+        file_dialog.setFileMode(QFileDialog.ExistingFile)
+        file_dialog.setNameFilter("MP3 Files (*.mp3)")
+
+        if file_dialog.exec_() == QFileDialog.Accepted:
+            files = file_dialog.selectedFiles()
+
+            if len(files) < 5:
+                information_box(self, "Error", "You need to upload at least 5 musics.")
+                return None
+
+            # Verify if all musics have at least 2 minutes and 30 seconds (150s)
+
+            for selected_file in files:
+                print("Selected MP3 file:", selected_file)
+
+                # Get the duration in seconds
+                audio, sr = librosa.load(selected_file)
+                duration_sec = librosa.get_duration(y=audio, sr=sr)
+                if duration_sec < 150:
+                    information_box(self, "Error", "Musics needs to have at least 2 minutes and 30 seconds.")
+                    return None
+
+            return files
+        else:
+            information_box(self, "Error", "File is not a mp3 file.")
+            return None
+
 
     def closeEvent(self, event):
         if not self.nextWindow or (not ("MusicsWindow" in str(self.nextWindow)) and not ("LoginWindow" in str(self.nextWindow))):
