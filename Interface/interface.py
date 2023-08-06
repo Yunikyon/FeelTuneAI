@@ -2677,13 +2677,32 @@ class ApplicationHomeScreen(QMainWindow):
             # Ask for upload
             files = self.select_mp3_files()
 
+            self.setDisabled(True)
+
             if files is None:
+                self.setDisabled(False)
                 return
 
-            self.setDisabled(True)
+            if any(files.count(x) > 1 for x in files):
+                information_box(self, "Error", "You can't upload multiple musics with the same name.")
+                self.setDisabled(False)
+                return
+
+            global musics_listened_by_current_user
+            for file in files:
+                if '/' in file:
+                    file = file.split('/')[-1]
+
+                if file in musics_listened_by_current_user:
+                    information_box(self, "Error", f"Music '{file}' already exists and has been listened to.")
+                    self.setDisabled(False)
+                    return
+
             folder_name = f"../musics"
             if not os.path.exists(folder_name):
                 os.makedirs(folder_name)
+
+            global current_user_name
 
             conn = sqlite3.connect('../feeltune.db')
             cursor = conn.cursor()
@@ -2723,6 +2742,7 @@ class ApplicationHomeScreen(QMainWindow):
                             self.setDisabled(False)
                             information_box(self, "Success", "Music was previously uploaded!")
                             return
+
                     shutil.copy2(file, folder_name)
                     file_name = file.split('/')[-1]
 
@@ -2740,10 +2760,8 @@ class ApplicationHomeScreen(QMainWindow):
                         QMessageBox.Ok,
                     )
 
-            global musics_listened_by_current_user
             global current_user_bpd_progress
             global is_in_building_dataset_phase
-            global current_user_name
 
             # Update user's progress variable
             number_of_musics_listened = len(musics_listened_by_current_user)
@@ -2755,8 +2773,8 @@ class ApplicationHomeScreen(QMainWindow):
 
             # Delete user's personalized model and the model's statistics
             os.remove(f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5")
-            os.remove(f"../Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
-            os.remove(f"../Optuna_History_images/{current_user_name.lower()}_optuna_slice_plot.png")
+            os.remove(f"./Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
+            os.remove(f"./Optuna_History_images/{current_user_name.lower()}_optuna_slice_plot.png")
 
             # Delete the user's normalized csv
             os.remove(f"../{current_user_name.lower()}_normalized_dataset.csv")
@@ -2770,7 +2788,7 @@ class ApplicationHomeScreen(QMainWindow):
 
     def select_mp3_files(self):
         file_dialog = QFileDialog()
-        file_dialog.setFileMode(QFileDialog.ExistingFile)
+        file_dialog.setFileMode(QFileDialog.ExistingFiles)
         file_dialog.setNameFilter("MP3 Files (*.mp3)")
 
         if file_dialog.exec_() == QFileDialog.Accepted:
@@ -2781,7 +2799,6 @@ class ApplicationHomeScreen(QMainWindow):
                 return None
 
             # Verify if all musics have at least 2 minutes and 30 seconds (150s)
-
             for selected_file in files:
                 print("Selected MP3 file:", selected_file)
 
@@ -2789,7 +2806,7 @@ class ApplicationHomeScreen(QMainWindow):
                 audio, sr = librosa.load(selected_file)
                 duration_sec = librosa.get_duration(y=audio, sr=sr)
                 if duration_sec < 150:
-                    information_box(self, "Error", "Musics needs to have at least 2 minutes and 30 seconds.")
+                    information_box(self, "Error", "All musics need to have at least 2 minutes and 30 seconds.")
                     return None
 
             return files
