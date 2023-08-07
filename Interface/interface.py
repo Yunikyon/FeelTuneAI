@@ -952,6 +952,33 @@ class MusicsWindow(QMainWindow):
         buttons_left_widget.setMaximumSize(4000, 60)
         buttons_layout.addWidget(buttons_left_widget)
 
+        if not is_in_building_dataset_phase:
+            buttons_middle_layout = QHBoxLayout()
+            buttons_middle_layout.setContentsMargins(70, 0, 0, 0)
+            buttons_middle_layout.setSpacing(15)
+            buttons_middle_layout.setAlignment(Qt.AlignLeft)
+
+            # Button Swap Goal Emotion
+            swap_goal_emotion_button = QPushButton("Swap Goal Emotion")
+            swap_goal_emotion_button_font = swap_goal_emotion_button.font()
+            swap_goal_emotion_button_font.setPointSize(10)
+            swap_goal_emotion_button.setFont(swap_goal_emotion_button_font)
+            swap_goal_emotion_button.setMaximumSize(220, 60)
+            swap_goal_emotion_button.setMinimumSize(220, 60)
+            swap_goal_emotion_button.setIcon(QIcon("./images/point_icon.png"))
+            swap_goal_emotion_button.setIconSize(QSize(50, 50))
+            swap_goal_emotion_button.setCursor(QCursor(Qt.PointingHandCursor))
+            swap_goal_emotion_button.setStyleSheet(
+                "* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
+            swap_goal_emotion_button.clicked.connect(self.swap_goal_emotion_btn_clicked)
+            buttons_middle_layout.addWidget(swap_goal_emotion_button)
+
+            buttons_middle_widget = QWidget()
+            buttons_middle_widget.setLayout(buttons_middle_layout)
+            buttons_middle_widget.setMaximumSize(4000, 60)
+            buttons_middle_widget.setMinimumSize(600, 60)
+            buttons_layout.addWidget(buttons_middle_widget)
+
         # Music play or pause button
         buttons_right_layout = QHBoxLayout()
         buttons_right_layout.setContentsMargins(0, 0, 0, 0)
@@ -1520,6 +1547,17 @@ class MusicsWindow(QMainWindow):
             self.nextWindow = LoginWindow()
             self.nextWindow.show()
             self.close()
+
+    def swap_goal_emotion_btn_clicked(self):
+        self.stop_threads()
+
+        global goal_emotion
+        goal_emotion = [0, 0]
+
+        # Switches to ApplicationHomeScreen Window
+        self.nextWindow = ApplicationHomeScreen()
+        self.nextWindow.show()
+        self.close()
 
     def closeEvent(self, event):
         if not ("LoginWindow" in str(self.nextWindow)) and not ("ApplicationHomeScreen" in str(self.nextWindow)) and not ("TrainingModelScreen" in str(self.nextWindow)):
