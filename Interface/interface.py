@@ -616,8 +616,7 @@ class LoginWindow(QMainWindow):
             progress = 0
             musics_listened_by_current_user = []
 
-        if progress == 100 and os.path.isfile(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5'):
-            is_in_building_dataset_phase = False
+        is_in_building_dataset_phase = not (progress == 100 and os.path.isfile(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5'))
 
         current_user_bpd_progress = progress
 
