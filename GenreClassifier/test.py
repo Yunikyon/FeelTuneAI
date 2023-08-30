@@ -7,13 +7,7 @@ from keras.layers import Flatten, Dense, BatchNormalization, Dropout
 from numpy import var, mean, max, where
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-import catboost as cb
-from xgboost import XGBClassifier
+from sklearn.metrics.pairwise import cosine_similarity
 import tensorflow.keras as keras
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import *
@@ -29,7 +23,7 @@ def train_model():
     music_data['label'] = label_encoder.fit_transform(music_data['label'])
 
     # Define the variables
-    X = music_data.drop(['label', 'filename'], axis=1)
+    X = music_data.drop(['label', 'filename', 'length'], axis=1)
     y = music_data['label']
 
     # Scale the data
@@ -60,7 +54,7 @@ def train_model():
 
     model = Sequential()
 
-    model.add(Flatten(input_shape=(58,)))
+    model.add(Flatten(input_shape=(57,)))
     model.add(Dense(256, activation='relu'))
     model.add(BatchNormalization())
     model.add(Dense(128, activation='relu'))
@@ -96,10 +90,34 @@ def extract_features(directory, csv_filename):
 
     for file in files:
         # audio = librosa.load(directory + '/' + file, duration=30.0133)
-        audio = librosa.load(directory + '/' + file, duration=150)
+        # audio = librosa.load(directory + '/' + file, duration=30, offset=60) # 150 seconds -> middle = 75s -> interval = 60 - 90 (30s)
+
+        y, sr = librosa.load(directory + '/' + file, duration=150)
+
+        mfccs = []
+        # for each 150 seconds
+        for i in range(1, 151):
+            mfccs.append(np.mean(librosa.feature.mfcc(y=y[((i-1)*sr):(i*sr)-1], sr=sr)))
+
+        lowest_distance = np.inf
+        best_offset = 0
+
+        # mfccs[0:30] -> [1;31] -> [2;32] -> .... [120;150]
+        for i in range(0, 121):
+            interval = mfccs[i:i+30]
+            minimum_distance = np.ptp(interval)
+
+            if minimum_distance <= lowest_distance:
+                lowest_distance = minimum_distance
+                best_offset = i
+
+        print(best_offset)
+        print(lowest_distance)
+
+        audio = librosa.load(directory + '/' + file, duration=30, offset=best_offset) # 150 seconds -> middle = 75s -> interval = 60 - 90 (30s)
 
         # Length
-        length = audio[0].shape[0]
+        # length = audio[0].shape[0]
 
         # Chroma_stft
         chroma_stft = np.array(librosa.feature.chroma_stft(y=audio[0], sr=audio[1]))
@@ -208,7 +226,7 @@ def extract_features(directory, csv_filename):
         mfcc20_mean = mean(mfccs_arrays[19])
         mfcc20_var = var(mfccs_arrays[19])
 
-        data.append([file, length, chroma_stft_mean, chroma_stft_var, rms_mean, rms_var, spectral_centroid_mean,
+        data.append([file, chroma_stft_mean, chroma_stft_var, rms_mean, rms_var, spectral_centroid_mean,
                      spectral_centroid_var, spectral_bandwidth_mean, spectral_bandwidth_var, rolloff_mean, rolloff_var,
                      zcr_mean, zcr_var, harmony_mean, harmony_var, perceptr_mean, perceptr_var, tempo, mfcc1_mean,
                      mfcc1_var, mfcc2_mean, mfcc2_var, mfcc3_mean, mfcc3_var, mfcc4_mean, mfcc4_var, mfcc5_mean,
@@ -231,7 +249,7 @@ def extract_features(directory, csv_filename):
 
     # Column names
     columns = [
-        "filename", "length", "chroma_sftf_mean", "chroma_sftf_var", "rms_mean", "rms_var",
+        "filename", "chroma_sftf_mean", "chroma_sftf_var", "rms_mean", "rms_var",
         "spectral_centroid_mean", "spectral_centroid_var", "spectral_bandwidth_mean", "spectral_bandwidth_var",
         "rolloff_mean", "rolloff_var", "zero_crossing_rate_mean", "zero_crossing_rate_var",
         "harmony_mean", "harmony_var", "perceptr_mean", "perceptr_var", "tempo",
@@ -267,7 +285,7 @@ def predict_musics_genres(directory, csv_filename_features, csv_filename_genres)
     X = pd.DataFrame(np_scaled, columns=cols)
 
     # Load model and predict
-    genre_model = keras.models.load_model(f'../models/genre_model.h5')
+    genre_model = keras.models.load_model(f'../models/genre_model_4.h5')
     predicted_genres = genre_model.predict(X)
 
     # Column names
@@ -296,6 +314,6 @@ def predict_musics_genres(directory, csv_filename_features, csv_filename_genres)
 
 if __name__ == '__main__':
     # train_model()
-    # extract_features('../musics', '../musics_genre_features.csv')
-    # predict_musics_genres('../musics', '../musics_genre_features.csv', '../musics_genre_predicted.csv')
-    predict_musics_genres('../musics', '../musics_genre_features_2.csv', '../musics_genre_predicted_2.csv')
+    # extract_features('../musics', '../musics_genre_features_6.csv')
+    predict_musics_genres('../musics', '../musics_genre_features.csv', '../musics_genre_predicted.csv')
+    # predict_musics_genres('../musics', '../musics_genre_features_2.csv', '../musics_genre_predicted_2.csv')
