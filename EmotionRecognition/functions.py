@@ -95,7 +95,7 @@ def detect_face(img, detector_backend = 'opencv', grayscale = False, enforce_det
 	img_region = [0, 0, img.shape[0], img.shape[1]]
 
 	#----------------------------------------------
-	#people would like to skip detection and alignment if they already have pre-processed images
+	#people would like to skip detection and alignment if they already have pre-processed Images
 	if detector_backend == 'skip':
 		return img, img_region
 
@@ -156,7 +156,7 @@ def normalize_input(img, normalization = 'base'):
 
 		elif(normalization == 'ArcFace'):
 			#Reference study: The faces are cropped and resized to 112×112,
-			#and each pixel (ranged between [0, 255]) in RGB images is normalised
+			#and each pixel (ranged between [0, 255]) in RGB Images is normalised
 			#by subtracting 127.5 then divided by 128.
 			img -= 127.5
 			img /= 128
@@ -248,7 +248,7 @@ def find_input_shape(model):
 		input_shape = input_shape[1:3]
 
 	#----------------------
-	#issue 289: it seems that tf 2.5 expects you to resize images with (x, y)
+	#issue 289: it seems that tf 2.5 expects you to resize Images with (x, y)
 	#whereas its older versions expect (y, x)
 
 	if tf_major_version == 2 and tf_minor_version >= 5:

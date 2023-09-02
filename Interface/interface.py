@@ -27,16 +27,14 @@ from EmotionRecognition.EmotionDetection import capture_emotion
 
 import pygame as pygame
 from PyQt5.QtCore import QSize, Qt, QPoint, QTimer, QRect, QThread, pyqtSignal
-from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QKeyEvent, QMovie, \
-    QTransform
+from PyQt5.QtGui import QPixmap, QPalette, QColor, QIcon, QCursor, QPainter, QPen, QFontMetrics, QMovie
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMainWindow, QLabel, QLineEdit, QVBoxLayout, \
     QHBoxLayout, QSlider, QMessageBox, QStackedWidget, QFileDialog
 from numpy.core.defchararray import strip
 import random
 import sqlite3
 
-from download_from_yt import download_musics, download_musics_from_csv
-from predict_musics_VA import predict_music_directory_emotions, predict_uploaded_music_emotions
+from MusicVAClassifier.predict_musics_VA import predict_uploaded_music_emotions
 
 current_user_name = ''
 is_in_building_dataset_phase = True
@@ -219,7 +217,7 @@ def get_context():
 
 
 def merge_musics_va_to_dataset(dataset):
-    conn = sqlite3.connect('../feeltune.db')
+    conn = sqlite3.connect('../Database/feeltune.db')
     musics_df = pd.read_sql_query("SELECT name, valence AS music_valence, arousal AS music_arousal FROM musics", conn)
     dataset = pd.merge(dataset, musics_df, left_on='music_name', right_on='name', how='left')
     conn.close()
@@ -274,7 +272,7 @@ def add_va_columns_from_emotions(dataset):
 def one_hot_encoding(filtered_df, filtered_df_column_name, predefined_columns):
     # 1. One hot encode existing values
     one_hot_encoded = pd.get_dummies(filtered_df[filtered_df_column_name], columns=predefined_columns, prefix_sep=' = ',
-                                     prefix=filtered_df_column_name)
+                                     prefix=filtered_df_column_name, dtype=int)
 
     # 2. Add missing columns with all values equal to 0
     missing_cols = set([f'{filtered_df_column_name} = {column}' for column in predefined_columns]) - set(one_hot_encoded.columns)
@@ -481,7 +479,7 @@ class LoginWindow(QMainWindow):
         left_layout.addWidget(feeltune_label)
 
         logo = QLabel()
-        logo.setPixmap(QPixmap('./images/feeltuneAI_logo.png'))
+        logo.setPixmap(QPixmap('./Images/feeltuneAI_logo.png'))
         logo.setScaledContents(True)
         logo.setMaximumSize(350, 420)
         logo.setContentsMargins(0, 0, 20, 120)
@@ -547,7 +545,7 @@ class LoginWindow(QMainWindow):
         tune_in_font.setPointSize(20)
         self.tune_in_button.setFont(tune_in_font)
         self.tune_in_button.setMinimumSize(60, 60)
-        self.tune_in_button.setIcon(QIcon('./images/tune_in_btn.png'))
+        self.tune_in_button.setIcon(QIcon('./Images/tune_in_btn.png'))
         self.tune_in_button.setIconSize(QSize(50, 50))
         self.tune_in_button.setFlat(True)
         self.tune_in_button.setStyleSheet("QPushButton { background-color: transparent;}")
@@ -597,7 +595,7 @@ class LoginWindow(QMainWindow):
         global is_in_building_dataset_phase
         global current_user_bpd_progress
 
-        conn = sqlite3.connect('../feeltune.db')
+        conn = sqlite3.connect('../Database/feeltune.db')
         cursor = conn.cursor()
 
         # Read user information, if it exists
@@ -616,7 +614,7 @@ class LoginWindow(QMainWindow):
             progress = 0
             musics_listened_by_current_user = []
 
-        is_in_building_dataset_phase = not (progress == 100 and os.path.isfile(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5'))
+        is_in_building_dataset_phase = not (progress == 100 and os.path.isfile(f'../ModelsMusicPredict/{current_user_name.lower()}_music_predict.h5'))
 
         current_user_bpd_progress = progress
 
@@ -659,7 +657,7 @@ class MusicsWindow(QMainWindow):
         self.music_files_length = 0
 
         # Get music files that are accessed by the user
-        conn = sqlite3.connect('../feeltune.db')
+        conn = sqlite3.connect('../Database/feeltune.db')
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
         user_id = cursor.fetchone()[0]
@@ -699,7 +697,7 @@ class MusicsWindow(QMainWindow):
         title_layout.setContentsMargins(0, 0, 0, 0)
 
         logo = QLabel()
-        logo.setPixmap(QPixmap('./images/feeltuneAI_logo.png'))
+        logo.setPixmap(QPixmap('./Images/feeltuneAI_logo.png'))
         logo.setScaledContents(True)
         logo.setMaximumSize(70, 70)
         title_layout.addWidget(logo)
@@ -886,7 +884,7 @@ class MusicsWindow(QMainWindow):
 
         # Volume Icon
         volume_icon = QLabel()
-        volume_icon.setPixmap(QPixmap('./images/Speaker_Icon.svg.png'))
+        volume_icon.setPixmap(QPixmap('./Images/Speaker_Icon.svg.png'))
         volume_icon.setScaledContents(True)
         volume_icon.setMaximumSize(30, 30)
         volume_column_layout.addWidget(volume_icon)
@@ -924,7 +922,7 @@ class MusicsWindow(QMainWindow):
         quit_button.setFont(quit_button_font)
         quit_button.setMaximumSize(120, 60)
         quit_button.setMinimumSize(120, 60)
-        quit_button.setIcon(QIcon("./images/quit_btn.png"))
+        quit_button.setIcon(QIcon("./Images/quit_btn.png"))
         quit_button.setIconSize(QSize(35, 35))
         quit_button.setCursor(QCursor(Qt.PointingHandCursor))
         quit_button.setStyleSheet("* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
@@ -938,7 +936,7 @@ class MusicsWindow(QMainWindow):
         sign_out_button.setFont(sign_out_button_font)
         sign_out_button.setMaximumSize(120, 60)
         sign_out_button.setMinimumSize(120, 60)
-        sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
+        sign_out_button.setIcon(QIcon("./Images/sign_out_btn.png"))
         sign_out_button.setIconSize(QSize(25, 25))
         sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
         sign_out_button.setStyleSheet(
@@ -964,7 +962,7 @@ class MusicsWindow(QMainWindow):
             swap_goal_emotion_button.setFont(swap_goal_emotion_button_font)
             swap_goal_emotion_button.setMaximumSize(220, 60)
             swap_goal_emotion_button.setMinimumSize(220, 60)
-            swap_goal_emotion_button.setIcon(QIcon("./images/point_icon.png"))
+            swap_goal_emotion_button.setIcon(QIcon("./Images/point_icon.png"))
             swap_goal_emotion_button.setIconSize(QSize(50, 50))
             swap_goal_emotion_button.setCursor(QCursor(Qt.PointingHandCursor))
             swap_goal_emotion_button.setStyleSheet(
@@ -987,7 +985,7 @@ class MusicsWindow(QMainWindow):
         self.pause_button = QPushButton()
         self.pause_button.setMaximumSize(60, 60)
         self.pause_button.setMinimumSize(60, 60)
-        self.pause_button.setIcon(QIcon("./images/pause_btn.png"))
+        self.pause_button.setIcon(QIcon("./Images/pause_btn.png"))
         self.pause_button.setProperty("icon_name", "pause")
         self.pause_button.setIconSize(QSize(30, 30))
         self.pause_button.setStyleSheet("* {background-color: #f7c997; border: 1px solid black;} *:hover {background-color: #ffb96b;}")
@@ -1056,7 +1054,7 @@ class MusicsWindow(QMainWindow):
         submit_font.setPointSize(20)
         submit_btn.setFont(submit_font)
         submit_btn.setMinimumSize(50, 50)
-        submit_btn.setIcon(QIcon('./images/tune_in_btn.png'))
+        submit_btn.setIcon(QIcon('./Images/tune_in_btn.png'))
         submit_btn.setIconSize(QSize(50, 50))
         submit_btn.setFlat(True)
         submit_btn.setStyleSheet("QPushButton { background-color: transparent;}")
@@ -1300,14 +1298,14 @@ class MusicsWindow(QMainWindow):
             self.music_thread.pause_music()
             self.emotion_thread.pause_emotions()
             self.music_is_paused = True
-            self.pause_button.setIcon(QIcon("./images/play_btn.png"))
+            self.pause_button.setIcon(QIcon("./Images/play_btn.png"))
             self.pause_button.setProperty("icon_name", "play")
             self.pause_button.setIconSize(QSize(30, 30))
         else:
             self.music_thread.resume_music()
             self.emotion_thread.resume_emotions()
             self.music_is_paused = False
-            self.pause_button.setIcon(QIcon("./images/pause_btn.png"))
+            self.pause_button.setIcon(QIcon("./Images/pause_btn.png"))
             self.pause_button.setProperty("icon_name", "pause")
             self.pause_button.setIconSize(QSize(30, 30))
 
@@ -1370,7 +1368,7 @@ class MusicsWindow(QMainWindow):
             filtered_df = normalize_dataset(self, df)
 
             # 4. Predict valence and arousal
-            model = keras.models.load_model(f'../MusicPredictModels/{current_user_name.lower()}_music_predict.h5')
+            model = keras.models.load_model(f'../ModelsMusicPredict/{current_user_name.lower()}_music_predict.h5')
             predictions = model.predict(filtered_df)[0]
 
             # Extract the predicted valence and arousal values
@@ -1452,7 +1450,7 @@ class MusicsWindow(QMainWindow):
         if current_user_bpd_progress == 0:
             return
 
-        conn = sqlite3.connect('../feeltune.db')
+        conn = sqlite3.connect('../Database/feeltune.db')
         cursor = conn.cursor()
         cursor.execute(f"SELECT * FROM users WHERE name = '{current_user_name.lower()}'")
         user = cursor.fetchone()
@@ -1760,7 +1758,7 @@ class MusicsWindow(QMainWindow):
             filtered_df = normalize_dataset(self, df)
 
             # Save BDP normalized dataset
-            filtered_df.to_csv(f'../{current_user_name.lower()}_normalized_dataset.csv', index=False)
+            filtered_df.to_csv(f'../NormalizedDatasets/{current_user_name.lower()}_normalized_dataset.csv', index=False)
 
             self.nextWindow = TrainingModelScreen()
             self.nextWindow.show()
@@ -1933,7 +1931,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         title_layout.setContentsMargins(0, 0, 0, 0)
 
         logo = QLabel()
-        logo.setPixmap(QPixmap('./images/feeltuneAI_logo.png'))
+        logo.setPixmap(QPixmap('./Images/feeltuneAI_logo.png'))
         logo.setScaledContents(True)
         logo.setMaximumSize(70, 70)
         title_layout.addWidget(logo)
@@ -2070,7 +2068,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         quit_button.setFont(quit_button_font)
         quit_button.setMaximumSize(120, 60)
         quit_button.setMinimumSize(120, 60)
-        quit_button.setIcon(QIcon("./images/quit_btn.png"))
+        quit_button.setIcon(QIcon("./Images/quit_btn.png"))
         quit_button.setIconSize(QSize(35, 35))
         quit_button.setCursor(QCursor(Qt.PointingHandCursor))
         quit_button.setStyleSheet("* {background-color: #cfbaa3; border: 1px solid black;} *:hover {background-color: #ba9a75;}")
@@ -2084,7 +2082,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
         sign_out_button.setFont(sign_out_button_font)
         sign_out_button.setMaximumSize(120, 60)
         sign_out_button.setMinimumSize(120, 60)
-        sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
+        sign_out_button.setIcon(QIcon("./Images/sign_out_btn.png"))
         sign_out_button.setIconSize(QSize(25, 25))
         sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
         sign_out_button.setStyleSheet(
@@ -2183,7 +2181,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
                 if music == file_name:
                     # The uploaded music was already classified for VA
 
-                    conn = sqlite3.connect('../feeltune.db')
+                    conn = sqlite3.connect('../Database/feeltune.db')
                     cursor = conn.cursor()
                     # Fetch user_id
                     cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
@@ -2258,7 +2256,7 @@ class QuadrantWidget(QWidget):
         self.setGeometry(100, 100, 500, 500)
 
         self.point = QRect()
-        self.image = QPixmap('./images/point_icon.png')
+        self.image = QPixmap('./Images/point_icon.png')
 
         global is_in_building_dataset_phase
         self.is_goal_emotion = not is_in_building_dataset_phase
@@ -2448,7 +2446,7 @@ class ApplicationHomeScreen(QMainWindow):
         title_layout.setContentsMargins(0, 0, 0, 0)
 
         logo = QLabel()
-        logo.setPixmap(QPixmap('./images/feeltuneAI_logo.png'))
+        logo.setPixmap(QPixmap('./Images/feeltuneAI_logo.png'))
         logo.setScaledContents(True)
         logo.setMaximumSize(70, 70)
         title_layout.addWidget(logo)
@@ -2529,7 +2527,7 @@ class ApplicationHomeScreen(QMainWindow):
         submit_font.setPointSize(20)
         submit_btn.setFont(submit_font)
         submit_btn.setMinimumSize(50, 50)
-        submit_btn.setIcon(QIcon('./images/tune_in_btn.png'))
+        submit_btn.setIcon(QIcon('./Images/tune_in_btn.png'))
         submit_btn.setIconSize(QSize(50, 50))
         submit_btn.setFlat(True)
         submit_btn.setStyleSheet("QPushButton { background-color: transparent;}")
@@ -2563,7 +2561,7 @@ class ApplicationHomeScreen(QMainWindow):
         quit_button.setFont(quit_button_font)
         quit_button.setMaximumSize(120, 60)
         quit_button.setMinimumSize(120, 60)
-        quit_button.setIcon(QIcon("./images/quit_btn.png"))
+        quit_button.setIcon(QIcon("./Images/quit_btn.png"))
         quit_button.setIconSize(QSize(35, 35))
         quit_button.setCursor(QCursor(Qt.PointingHandCursor))
         quit_button.setStyleSheet(
@@ -2578,7 +2576,7 @@ class ApplicationHomeScreen(QMainWindow):
         sign_out_button.setFont(sign_out_button_font)
         sign_out_button.setMaximumSize(120, 60)
         sign_out_button.setMinimumSize(120, 60)
-        sign_out_button.setIcon(QIcon("./images/sign_out_btn.png"))
+        sign_out_button.setIcon(QIcon("./Images/sign_out_btn.png"))
         sign_out_button.setIconSize(QSize(25, 25))
         sign_out_button.setCursor(QCursor(Qt.PointingHandCursor))
         sign_out_button.setStyleSheet(
@@ -2603,7 +2601,7 @@ class ApplicationHomeScreen(QMainWindow):
         return_to_bdp_button.setFont(return_to_bdp_font)
         return_to_bdp_button.setMaximumSize(170, 60)
         return_to_bdp_button.setMinimumSize(170, 60)
-        return_to_bdp_button.setIcon(QIcon("./images/return_to_bdp.png"))
+        return_to_bdp_button.setIcon(QIcon("./Images/return_to_bdp.png"))
         return_to_bdp_button.setIconSize(QSize(25, 25))
         return_to_bdp_button.setCursor(QCursor(Qt.PointingHandCursor))
         return_to_bdp_button.setStyleSheet(
@@ -2644,7 +2642,7 @@ class ApplicationHomeScreen(QMainWindow):
         global application_music_names
 
         # Music files that are accessed by the user
-        conn = sqlite3.connect('../feeltune.db')
+        conn = sqlite3.connect('../Database/feeltune.db')
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
         user_id = cursor.fetchone()[0]
@@ -2741,7 +2739,7 @@ class ApplicationHomeScreen(QMainWindow):
 
             global current_user_name
 
-            conn = sqlite3.connect('../feeltune.db')
+            conn = sqlite3.connect('../Database/feeltune.db')
             cursor = conn.cursor()
 
             cursor.execute("SELECT * FROM users WHERE name = ?", (current_user_name.lower(),))
@@ -2810,12 +2808,12 @@ class ApplicationHomeScreen(QMainWindow):
             conn.commit()
 
             # Delete user's personalized model and the model's statistics
-            os.remove(f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5")
+            os.remove(f"../ModelsMusicPredict/{current_user_name.lower()}_music_predict.h5")
             os.remove(f"./Optuna_History_images/{current_user_name.lower()}_optuna_history.png")
             os.remove(f"./Optuna_History_images/{current_user_name.lower()}_optuna_slice_plot.png")
 
             # Delete the user's normalized csv
-            os.remove(f"../{current_user_name.lower()}_normalized_dataset.csv")
+            os.remove(f"../NormalizedDatasets/{current_user_name.lower()}_normalized_dataset.csv")
 
             information_box(self, "Success", "Musics uploaded!\nReturning you to BDP.")
 
@@ -2886,7 +2884,7 @@ class TrainingModelScreen(QMainWindow):
         title_layout.setContentsMargins(0, 0, 0, 0)
 
         logo = QLabel()
-        logo.setPixmap(QPixmap('./images/feeltuneAI_logo.png'))
+        logo.setPixmap(QPixmap('./Images/feeltuneAI_logo.png'))
         logo.setScaledContents(True)
         logo.setMaximumSize(70, 70)
         title_layout.addWidget(logo)
@@ -2938,7 +2936,7 @@ class TrainingModelScreen(QMainWindow):
         spinner_layout.setContentsMargins(0, 0, 0, 0)
 
         spinner = QLabel()
-        movie = QMovie("./images/spinner.gif")
+        movie = QMovie("./Images/spinner.gif")
         spinner.setMovie(movie)
         spinner.setMaximumSize(450, 300)
         spinner.setMinimumSize(450, 300)
@@ -3139,7 +3137,7 @@ class TrainThread(QThread):
             # Return the test metric as the objective value to be optimized (minimized)
             return metric
 
-        with open(f'../{current_user_name.lower()}_normalized_dataset.csv', 'r') as file:
+        with open(f'../NormalizedDatasets/{current_user_name.lower()}_normalized_dataset.csv', 'r') as file:
             # 1. Get normalized dataset of username
             dataset = pd.read_csv(file)
 
@@ -3192,12 +3190,12 @@ class TrainThread(QThread):
             print('Best parameters: {}'.format(best_trial.params))
 
             # Create folder if it does not exist
-            folder_name = f"../MusicPredictModels/"
+            folder_name = f"../ModelsMusicPredict/"
             if not os.path.exists(folder_name):
                 os.makedirs(folder_name)
 
             # 6. Save the model
-            model_file = f"../MusicPredictModels/{current_user_name.lower()}_music_predict.h5"
+            model_file = f"../ModelsMusicPredict/{current_user_name.lower()}_music_predict.h5"
             best_model.save(model_file)
 
 

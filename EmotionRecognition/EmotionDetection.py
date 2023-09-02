@@ -69,7 +69,7 @@ def analyze(img_path, actions=('emotion', 'age', 'gender', 'race'), model=None, 
 	This function analyzes facial attributes including age, gender, emotion and race
 
 	Parameters:
-		img_path: exact image path, numpy array or base64 encoded image could be passed. If you are going to analyze lots of images, then set this to list. e.g. img_path = ['img1.jpg', 'img2.jpg']
+		img_path: exact image path, numpy array or base64 encoded image could be passed. If you are going to analyze lots of Images, then set this to list. e.g. img_path = ['img1.jpg', 'img2.jpg']
 
 		actions (tuple): The default is ('age', 'gender', 'emotion', 'race'). You can drop some of those attributes.
 
@@ -81,7 +81,7 @@ def analyze(img_path, actions=('emotion', 'age', 'gender', 'race'), model=None, 
 			model = DeepFace.build_model('Emotion')
 			models['race'] = DeepFace.build_model('Race')
 
-		enforce_detection (boolean): The function throws exception if a face could not be detected. Set this to True if you don't want to get exception. This might be convenient for low resolution images.
+		enforce_detection (boolean): The function throws exception if a face could not be detected. Set this to True if you don't want to get exception. This might be convenient for low resolution Images.
 
 		detector_backend (string): set face detector backend as retinaface, mtcnn, opencv, ssd or dlib.
 
