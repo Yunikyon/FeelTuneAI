@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 import csv
+import os
 
 import matplotlib.pyplot as plt
 import optuna
@@ -105,7 +106,120 @@ def download_mu_vi_musics():
     download_from_csv_with_yt_ids('va_dataset.csv')
 
 
+# def extract_features(directory, csv_filename):
+#     # Get all files in the directory
+#     files = os.listdir(directory)
+#
+#     data = []
+#
+#     for file in files:
+#         y, sr = librosa.load(directory + '/' + file, duration=150)
+#
+#         # dataset = pd.read_csv("training_dataset.csv")
+#         # print("Dataset read")
+#
+#         # --- Extract Common features using librosa
+#         mfcc
+#
+#
+#         # Mel-frequency cepstral coefficients (MFCCs)
+#         mfcc = np.array([librosa.feature.mfcc(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
+#                                               sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
+#                          for file in dataset["Music_name"]])
+#         print(np.min(mfcc))  # -667.08264
+#         print(np.max(mfcc))  # 260.12265
+#         mfcc = np.around(np.interp(mfcc, (-700, 300), (0, 1)), decimals=3)
+#         print("Mfcc done!")
+#
+#         # Spectral centroid
+#         cent = np.array(
+#             [librosa.feature.spectral_centroid(y=librosa.load('MuVi_musics/' + file, duration=150)[0]) for file in
+#              dataset["Music_name"]])
+#         print(np.min(cent))  # 0.0
+#         print(np.max(cent))  # 8504.014129762603
+#         cent = np.around(np.interp(cent, (0, 8550), (0, 1)), decimals=3)
+#         print("cent done!")
+#
+#         # Zero-crossing rate
+#         zcr = np.array(
+#             [librosa.feature.zero_crossing_rate(y=librosa.load('MuVi_musics/' + file, duration=150)[0]) for file in
+#              dataset["Music_name"]])
+#         print(np.min(zcr))  # 0.0
+#         print(np.max(zcr))  # 0.82666015625
+#         zcr = np.around(zcr, decimals=3)
+#         print("zcr done!")
+#
+#
+#         # --- Extract Valence features using librosa
+#         # Chroma features
+#         chroma_cqt = np.array(
+#             [librosa.feature.chroma_cqt(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
+#                                         sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
+#              for file in dataset["Music_name"]])
+#         print(np.min(chroma_cqt))  # 0.0049088965
+#         print(np.max(chroma_cqt))  # 1.0
+#         chroma_cqt = np.around(chroma_cqt, decimals=3)
+#         print("Chroma_cqt done!")
+#
+#         chroma_stft = np.array(
+#             [librosa.feature.chroma_stft(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
+#                                          sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
+#              for file in dataset["Music_name"]])
+#         print(np.min(chroma_stft))  # 0.0
+#         print(np.max(chroma_stft))  # 1.0
+#         chroma_stft = np.around(chroma_stft, decimals=3)
+#         print("chroma_stft done!")
+#
+#         chroma_cens = np.array(
+#             [librosa.feature.chroma_cens(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
+#                                          sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
+#              for file in dataset["Music_name"]])
+#         print(np.min(chroma_cens))  # 0.0
+#         print(np.max(chroma_cens))  # 1.0
+#         chroma_cens = np.around(chroma_cens, decimals=3)
+#         print("chroma_cens done!")
+#
+#         # Spectral rolloff
+#         rolloff = np.array(
+#             [librosa.feature.spectral_rolloff(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
+#                                               sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
+#              for file in dataset["Music_name"]])
+#         print(np.min(rolloff))  # 0.0
+#         print(np.max(rolloff))  # 10562.0361328125
+#         rolloff = np.around(np.interp(rolloff, (0, 10800), (0, 1)), decimals=3)
+#         print("rolloff done!")
+#
+#         # --- Extract Arousal features using librosa
+#         # Spectral contrast
+#         spectral_contrast = np.array(
+#             [librosa.feature.spectral_contrast(y=librosa.load('MuVi_musics/' + file, duration=150)[0],
+#                                                sr=librosa.load('MuVi_musics/' + file, duration=150)[1])
+#              for file in dataset["Music_name"]])
+#         print(np.min(spectral_contrast))  # 0.17194677838910621
+#         print(np.max(spectral_contrast))  # 72.256236009688
+#         spectral_contrast = np.around(np.interp(spectral_contrast, (0, 100), (0, 1)), decimals=3)
+#         print("Spectral_contrast done!")
+#
+#     # Create individual DataFrames for each array
+#     dataframe_mfcc = pd.DataFrame(mfcc.reshape(mfcc.shape[0], -1))
+#     dataframe_cent = pd.DataFrame(cent.reshape(cent.shape[0], -1))
+#     dataframe_zcr = pd.DataFrame(zcr.reshape(zcr.shape[0], -1))
+#     dataframe_chroma_cqt = pd.DataFrame(chroma_cqt.reshape(chroma_cqt.shape[0], -1))
+#     dataframe_chroma_stft = pd.DataFrame(chroma_stft.reshape(chroma_stft.shape[0], -1))
+#     dataframe_chroma_cens = pd.DataFrame(chroma_cens.reshape(chroma_cens.shape[0], -1))
+#     dataframe_rolloff = pd.DataFrame(rolloff.reshape(rolloff.shape[0], -1))
+#     dataframe_spectral_contrast = pd.DataFrame(spectral_contrast.reshape(spectral_contrast.shape[0], -1))
+#
+#     # Concatenate the DataFrames along the column axis (axis=1)
+#     dataframe_valence = pd.concat([dataframe_mfcc, dataframe_cent, dataframe_zcr, dataframe_chroma_cqt,
+#                                    dataframe_chroma_stft, dataframe_chroma_cens, dataframe_rolloff], axis=1)
+#
+#     dataframe_arousal = pd.concat([dataframe_mfcc, dataframe_cent, dataframe_zcr, dataframe_spectral_contrast], axis=1)
+
+
 def build_model():
+   # extract_features('MuVi_musics/','../MusicsVAClassification/FeaturesExtracted/MuVi_musics_features.csv')
+
     # Load arousal_valence dataset
     dataset = pd.read_csv("training_dataset.csv")
     print("Dataset read")
@@ -258,7 +372,7 @@ def build_model():
     print('Best parameters: {}'.format(best_trial.params))
     #
     # Save the best model
-    best_model_valence.save("../models/valence_model.h5")
+    best_model_valence.save("../Models/valence_model.h5")
 
     # --- Arousal Model With Optuna
     print(f"Training Arousal...")
@@ -298,7 +412,7 @@ def build_model():
     print('Best parameters: {}'.format(best_trial_arousal.params))
 
     # Save the best mode
-    best_model_arousal.save("../models/arousal_model.h5")
+    best_model_arousal.save("../Models/arousal_model.h5")
 
 
 def objective(trial, x_train, x_test, x_val, y_train, y_test, y_val, characteristic):

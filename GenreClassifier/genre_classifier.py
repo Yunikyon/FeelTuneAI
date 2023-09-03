@@ -2,18 +2,39 @@ import os
 
 import librosa
 import numpy as np
+import optuna
 import pandas as pd
+from keras import Model
 from keras.layers import Flatten, Dense, BatchNormalization, Dropout
+from keras.optimizers import SGD
 from numpy import var, mean, max, where
-from sklearn import preprocessing
+from sklearn import preprocessing, metrics
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import cosine_similarity
 import tensorflow.keras as keras
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import *
+from keras.layers import Input, Dense, Dropout
+import optuna.visualization as vis
 
-def train_model():
-    music_data = pd.read_csv('file.csv')
+
+def objective(trial, x_train, x_test, x_val, y_train, y_test, y_val):
+    # Define the hyperparameters to be optimized
+    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+    num_units = trial.suggest_int('num_units', 250, 1050)
+    dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
+    batch_size = trial.suggest_int('batch_size', 8, 230)
+    epochs = trial.suggest_int('epochs', 50, 250)
+
+    # Train the model and obtain the validation metric
+    metric, _ = train_model(x_train, x_test, x_val, y_train, y_test, y_val, learning_rate,
+                            num_units, dropout_rate, epochs, batch_size)
+
+    # Return the validation metric as the objective value to be optimized (minimized)
+    return metric
+
+def build_model():
+    music_data = pd.read_csv('file.csv') # 30 seconds musics
     # music_data.head(5)
     # print(music_data)
     # print(music_data['label'].value_counts())
@@ -34,38 +55,45 @@ def train_model():
     # new data frame with the new scaled data.
     X = pd.DataFrame(np_scaled, columns=cols)
 
-    # Split the data
-    X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                        test_size=0.3,
-                                                        random_state=111)
+    print("Train and test split...")
+    # Split data into training and testing sets for Valence
+    x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
-    model = Sequential()
+    # Split data into training and validation sets for Valence
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.25, random_state=42)
 
-    model.add(Flatten(input_shape=(57,)))
-    model.add(Dense(256, activation='relu'))
-    model.add(BatchNormalization())
-    model.add(Dense(128, activation='relu'))
-    model.add(Dropout(0.3))
-    model.add(Dense(10, activation='softmax'))
+    # --- Genre Model With Optuna
+    print("Training Genre Classifier...")
+    study = optuna.create_study(direction='maximize')
+    study.optimize(lambda trial: objective(trial, x_train, x_test, x_val, y_train, y_test, y_val), n_trials=250)
 
-    # compile the model
-    adam = keras.optimizers.Adam(lr=1e-4)
-    model.compile(optimizer=adam,
-                  loss="sparse_categorical_crossentropy",
-                  metrics=["accuracy"])
+    # Plot and save the optimization history
+    fig = vis.plot_optimization_history(study)
+    fig.update_layout(title="Genre Optimization History", yaxis_title="Accuracy")
+    fig.write_image("./Optuna_History_images/genre_optuna_history.png")
 
-    hist = model.fit(X_train, y_train,
-                     validation_data=(X_test, y_test),
-                     epochs=100,
-                     batch_size=32)
+    # Plot and save the slice plot
+    fig = vis.plot_slice(study)
+    fig.update_layout(title="Genre Slice Plot", yaxis_title="Accuracy")
+    fig.write_image("./Optuna_History_images/genre_optuna_slice_plot.png")
 
-    model_to_save = hist.model
+    best_trial = study.best_trial
+    best_learning_rate = best_trial.params['learning_rate']
+    best_num_units = best_trial.params['num_units']
+    best_dropout_rate = best_trial.params['dropout_rate']
+    best_epochs = best_trial.params['epochs']
+    best_batch_size = best_trial.params['batch_size']
 
+    best_metric, best_model = train_model(x_train, x_test, x_val, y_train, y_test, y_val,
+                                                          best_learning_rate, best_num_units, best_dropout_rate,
+                                                          best_epochs, best_batch_size)
+
+    print('Best validation Accuracy value: {:.5f}'.format(best_metric))
+    print('Best parameters: {}'.format(best_trial.params))
+    #
     # Save the best model
-    model_to_save.save("../Models/genre_model.h5")
+    best_model.save("../Models/genre_model_2.h5")
 
-    test_error, test_accuracy = model.evaluate(X_test, y_test, verbose=1)
-    print(f"Test accuracy: {test_accuracy}")
 
 def extract_features(directory, csv_filename):
     # Get all files in the directory
@@ -255,6 +283,83 @@ def extract_features(directory, csv_filename):
     # Save the DataFrame to a CSV file
     df.to_csv(csv_filename, index=False)
 
+def train_model(x_train, x_test, x_val, y_train, y_test, y_val, learning_rate, num_units, dropout_rate,
+                epochs, batch_size):
+
+    # model = Sequential()
+    #
+    # model.add(Flatten(input_shape=(57,)))
+    # model.add(Dense(256, activation='relu'))
+    # model.add(BatchNormalization())
+    # model.add(Dense(128, activation='relu'))
+    # model.add(Dropout(0.3))
+    # model.add(Dense(10, activation='softmax'))
+    #
+    # # compile the model
+    # adam = keras.optimizers.Adam(lr=1e-4)
+    # model.compile(optimizer=adam,
+    #               loss="sparse_categorical_crossentropy",
+    #               metrics=["accuracy"])
+    #
+    # hist = model.fit(X_train, y_train,
+    #                  validation_data=(X_test, y_test),
+    #                  epochs=100,
+    #                  batch_size=32)
+    #
+    # model_to_save = hist.model
+    #
+    # # Save the best model
+    # model_to_save.save("../Models/genre_model.h5")
+    #
+    # test_error, test_accuracy = model.evaluate(X_test, y_test, verbose=1)
+    # print(f"Test accuracy: {test_accuracy}")
+    # --------------------------------
+
+    # Define the input shape
+    input_shape = (x_train.shape[1],)
+
+    # Define the inputs
+    inputs = Input(shape=input_shape)
+
+    # Define the hidden layer with one layer and num_units neurons
+    hidden_layer = Dense(num_units, activation='sigmoid')(inputs)
+    hidden_layer = Dropout(dropout_rate)(hidden_layer)
+
+    # Define the output layer with 1 neuron
+    outputs = Dense(10, activation='softmax')(hidden_layer)
+
+    # Create the model
+    model = Model(inputs=inputs, outputs=outputs)
+
+    # Compile the model with the desired learning rate
+    optimizer = SGD(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss="sparse_categorical_crossentropy", metrics=['accuracy'])
+
+    # Train the model
+    history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+
+    print(f"Train Sparse Categorical crossentropy: {history.history['loss'][-1]}")
+    print(f"Train Accuracy: {history.history['accuracy'][-1]}")
+
+    # Evaluate the model using the test data
+    evaluation_results = model.evaluate(x_test, y_test)
+    print(f"Test Sparse Categorical crossentropy: {evaluation_results[model.metrics_names.index('loss')]}")
+    print(f"Test Accuracy: {evaluation_results[model.metrics_names.index('accuracy')]}")
+
+    # Validate the model using the validation data
+    y_pred = []
+    estimated_pred = model.predict(x_val)
+
+    for i in range(0, len(estimated_pred)):
+        y_pred.append(np.argmax(estimated_pred[i]))
+
+    accuracy_score = metrics.accuracy_score(y_val, y_pred, normalize=True)
+    f1_score = metrics.f1_score(y_val, y_pred, average='micro')
+    print(f"Validation Accuracy Score: {accuracy_score}")
+    print(f"Validation F1 Score: {f1_score}")
+
+    # Return the metric values for each epoch during training
+    return accuracy_score, model
 
 def predict_musics_genres(directory, csv_filename_features, csv_filename_genres):
     extract_features(directory, csv_filename_features)
@@ -300,8 +405,8 @@ def predict_musics_genres(directory, csv_filename_features, csv_filename_genres)
     df.to_csv(csv_filename_genres, index=False)
 
 if __name__ == '__main__':
-    # train_model()
+    build_model()
     # extract_features('../musics', '../musics_genre_features_6.csv')
-    predict_musics_genres('../musics', '../GenreClassification/FeaturesExtracted/musics_genre_features.csv',
-                          '../GenreClassification/GenresPredicted/musics_genre_predicted.csv')
+    # predict_musics_genres('../musics', '../GenreClassification/FeaturesExtracted/musics_genre_features.csv',
+    #                       '../GenreClassification/GenresPredicted/musics_genre_predicted.csv')
     # predict_musics_genres('../musics', '../musics_genre_features_2.csv', '../musics_genre_predicted_2.csv')
