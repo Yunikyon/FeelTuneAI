@@ -1,3 +1,23 @@
-# FeelTuneAI 🎧
+# 🎧 FeelTune AI 
 
-This paper describes a proposal to build a personalized music suggestion model, focusing on users and their emotions. The aim is to explore its feasibility and develop a prototype capable of leading the user to a desired emotion. To this end, some studies associated with this subject were carried out, which were useful in the process of developing the solution, and we also analysed some similar works. Through these, we concluded that although this area has some tools available, these are not suitable for the purpose of having personalized music recommendations for each user individually according to a desired emotion. We then present a proposal and the respective prototype developed with the aspects considered in that proposal. This prototype contains several parts, namely, emotion recognition, songs' classification according to their Valence and Arousal, and user context capture. Despite the fact that the application has few songs available and that they do not cover the whole area of the Valence and Arousal graph, we considered the performance of the song prediction models as satisfactory. It is also necessary to have in mind that not all people express their emotions through facial expressions so, in an ideal situation, we would rely on additional information to assess the person’s emotion. Finally, we conclude that there is potential in the intersection between music and human-computer interaction, where this is proved by the prototype developed and by the results achieved. Some directions for future work are also presented whose purpose is to overcome the limitations encountered. 
+<div align="justify"> 
+This work proposes an approach to build a personalized music suggestion model, focusing on users and their emotions. The aim is to explore its feasibility and develop a prototype capable of leading the user to a desired emotion. To this end, some studies associated with this subject were carried out, which were useful in the process of developing the solution, and we also analysed some similar works. Through these, we concluded that although this area has some tools available, these are not suitable for the purpose of having personalized music recommendations for each user individually according to a desired emotion. We then present a proposal and the respective prototype developed with the aspects considered in that proposal. This prototype contains several parts, namely, emotion recognition, songs' classification according to their Valence and Arousal, and user context capture. Despite the fact that the application has few songs available and that they do not cover the whole area of the Valence and Arousal graph, we considered the performance of the song prediction models as satisfactory. It is also necessary to have in mind that not all people express their emotions through facial expressions so, in an ideal situation, we would rely on additional information to assess the person’s emotion. Finally, we conclude that there is potential in the intersection between music and human-computer interaction, where this is proved by the prototype developed and by the results achieved. Some directions for future work are also presented whose purpose is to overcome the limitations encountered. 
+</div>
+
+## Characteristics
+
+- Programming Language: python
+- 
+
+## Requirements
+
+- 
+
+## Usage Instructions
+
+1. 
+
+## Video
+
+https://github.com/Yunikyon/FeelTuneAI/assets/93437355/be96f7d5-2f14-43a3-a9f0-ac12590e8915
+
