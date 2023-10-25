@@ -34,7 +34,8 @@ from numpy.core.defchararray import strip
 import random
 import sqlite3
 
-from MusicVAClassifier.predict_musics_VA import predict_uploaded_music_emotions
+from MusicVAClassifier.predict_musics_VA import predict_uploaded_music_va, predict_music_directory_va
+from download_from_yt import download_musics_from_csv
 
 current_user_name = ''
 is_in_building_dataset_phase = True
@@ -2206,7 +2207,7 @@ class BuildingPhaseHomeScreen(QMainWindow):
             shutil.copy2(file, folder_name)
             file_name = file.split('/')[-1]
 
-            predict_uploaded_music_emotions(folder_name, file_name, current_user_name.lower())
+            predict_uploaded_music_va(folder_name, file_name, current_user_name.lower())
             self.setDisabled(False)
             QMessageBox.information(
                 self, "Success", "Music uploaded!",
@@ -2781,7 +2782,7 @@ class ApplicationHomeScreen(QMainWindow):
                     shutil.copy2(file, folder_name)
                     file_name = file.split('/')[-1]
 
-                    predict_uploaded_music_emotions(folder_name, file_name, current_user_name.lower())
+                    predict_uploaded_music_va(folder_name, file_name, current_user_name.lower())
                     self.setDisabled(False)
                     # QMessageBox.information(
                     #     self, "Success", "Music uploaded!",
@@ -3206,13 +3207,8 @@ class TrainThread(QThread):
 
 
 def main():
-    # download_musics_from_csv('../bdp_musics_id.csv', '../BuildingDatasetPhaseMusics')
-    # predict_music_directory_emotions('../ApplicationMusics', '../applications_musics_va')
     app = QApplication([])
     window = LoginWindow()
-    # window = TrainingModelScreen()
-    # window = MusicsWindow()
-    # window = ApplicationHomeScreen()
     window.show()
     app.exec()
 

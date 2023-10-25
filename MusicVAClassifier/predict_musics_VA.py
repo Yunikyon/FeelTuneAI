@@ -11,8 +11,10 @@ import pandas as pd
 import tensorflow as tf
 from keras.api import keras
 
+from download_from_yt import download_musics_from_csv
 
-def predict_music_directory_emotions(directory):
+
+def predict_music_directory_va(directory):
     # Get all files in the directory
     files = os.listdir(directory)
 
@@ -137,7 +139,7 @@ def predict_music_directory_emotions(directory):
     conn.close()
 
 
-def predict_uploaded_music_emotions(directory, file, user_uploaded=None):
+def predict_uploaded_music_va(directory, file, user_uploaded=None):
     # --- Extract Common features using librosa
     # Mel-frequency cepstral coefficients (MFCCs)
     mfcc = np.array([librosa.feature.mfcc(y=librosa.load(directory + '/' + file, duration=150)[0],
@@ -253,8 +255,8 @@ def predict_uploaded_music_emotions(directory, file, user_uploaded=None):
 
 
 if __name__ == '__main__':
-    predict_music_directory_emotions('./musics')
+    if not os.path.exists('Musics'):
+        os.makedirs('Musics')
 
-# predict_uploaded_music_emotions('./BuildingDatasetPhaseMusics', 'Avril Lavigne - Girlfriend (Official Video).mp3', 'building_dataset_phase_musics_va')
-
-# predict_dataset_emotions('musics_to_classify', 'musics_classified')
+    download_musics_from_csv('../bdp_musics_id.csv', '../Musics')
+    predict_music_directory_va('../Musics')

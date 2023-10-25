@@ -1,0 +1,15 @@
+keras==2.12.0
+tensorflow==2.12.0
+librosa
+pandas==1.5.3
+mutagen
+optuna
+python-dotenv
+geocoder
+geopy
+PyQt5
+deepface
+pygame
+youtube_dl
+plotly==5.15.0
+kaleido

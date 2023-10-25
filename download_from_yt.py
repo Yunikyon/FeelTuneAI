@@ -54,6 +54,6 @@ def download_musics_from_csv(csv_file, directory):
             download_music(row[0], directory)
 
 if __name__ == '__main__':
-    download_music('ujNeHIo7oTE', "C:\\Users\\Yunikyon\\Downloads\\download musics to test")
+    download_music('youtube_id', "folder_to_save_music")
     # download_music('ujNeHIo7oTE', "./test/")
 
