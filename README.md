@@ -10,7 +10,7 @@ This work proposes an approach to build a personalized music suggestion model, f
 ## Characteristics
 
 - Programming Language: python, v.310
-- Valence and Arousal Classification Models: usage of [MuVi dataset](https://github.com/AMAAI-Lab/MuVi) and SVM architecture
+- Valence and Arousal Classification Models: usage of [MuVi dataset](https://github.com/AMAAI-Lab/MuVi) and MLP architecture
 
 ## Requirements
 
