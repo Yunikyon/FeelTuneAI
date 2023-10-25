@@ -43,5 +43,5 @@ Despite the fact that the application has few songs available and that they do n
 
 ## Video
 
-https://github.com/Yunikyon/FeelTuneAI/assets/93437355/be96f7d5-2f14-43a3-a9f0-ac12590e8915
+https://github.com/Yunikyon/FeelTuneAI/assets/93437355/fc58e2df-fcc8-446e-89d5-61976d04cd49
 
