@@ -10,7 +10,7 @@ Despite the fact that the application has few songs available and that they do n
 
 ## Characteristics
 
-- Programming Language: python, v.310
+- Programming Language: Python, v3.10
 - Valence and Arousal Classification Models: usage of [MuVi dataset](https://github.com/AMAAI-Lab/MuVi) and MLP architecture
 
 ## Requirements
@@ -31,10 +31,15 @@ Despite the fact that the application has few songs available and that they do n
 - plotly==5.15.0
 - kaleido
 
-## Usage Instructions
+## Setup Instructions
 
-1. Install all requriments
-2. Execute the file ```interface.py```
+1. Install all requriments ```pip install requirements.txt```
+2. Execute the file ```MusicVAClassifier/predict_musics_VA.py```
+3. Execute the file ```MusicVAClassifier/train_models.py```
+
+## Usage Instructions
+1. Execute the file ```Interface/interface.py```
+2. Enjoy the application :D
 
 ## Video
 
